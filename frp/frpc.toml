@@ -1,0 +1,36 @@
+serverAddr = "你的服务器IP地址"
+serverPort = 9001
+
+[[proxies]]
+name = "telnet-android"
+type = "tcp"
+localIP = "127.0.0.1"
+localPort = 23
+remotePort = 23
+
+[[proxies]]
+name = "scrcpy-android"
+type = "tcp"
+localIP = "192.168.43.1"
+localPort = 5555
+remotePort = 5555
+
+[[proxies]]
+name = "smb-android"
+type = "tcp"
+localIP = "192.168.43.1"
+localPort = 445
+remotePort = 447
+
+[[proxies]]
+name = "android-file"
+type = "tcp"
+remotePort = 5500
+[proxies.plugin]
+type = "static_file"
+# 本地文件目录，对外提供访问
+localPath = "/"
+# URL 中的前缀，将被去除，保留的内容即为要访问的文件路径
+stripPrefix = ""
+httpUser = ""
+httpPassword = ""
