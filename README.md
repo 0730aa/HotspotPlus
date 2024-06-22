@@ -12,6 +12,15 @@
 
 # 更新日志
 
+- **frpc自启动v3.7**
+
+   引入 jq 工具检索 config
+   config 文件配置新增定时规则设置
+   新增 cron_update
+   新增 service log 日志输出
+   
+
+
 - **frpc自启动v3.1**
 
    修改 magisk 模块的一些书写格式

@@ -1,4 +1,4 @@
-serverAddr = "你的服务器IP地址"
+serverAddr = "你的服务器ip"
 serverPort = 9001
 
 [[proxies]]

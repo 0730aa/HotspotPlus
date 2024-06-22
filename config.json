@@ -1,7 +1,7 @@
 {
+
 // 开启 adb 端口，默认端口 5555，需要可自行修改
 // 关闭某个功能 把 true 改成其他值就行
-
   "start_adb": true,
   "adb_port": 5555,
   
@@ -9,6 +9,28 @@
   "start_telnet": true,
   
 // 开启 ftp 服务，默认控制端口号 21
-  "start_ftp": true
+  "start_ftp": true,
+  
+// 定时规则配置，请修改完后手动执行模块目录下的 cron_update.sh 文件，执行完立即生效。enabled 是开关，不想要哪个改 false 就行
+  "cron_jobs": [
+    {
+      "comment": "test文件定时测试。可在模块目录看到每两分钟有执行一次的 test.log",
+      "enabled": true,
+      "schedule": "*/4 * * * *",
+      "command": "/data/adb/modules/autofrp/RunAuto/sh/test.sh"
+    },   
+    {
+      "comment": "frpc定时启动。每50分钟运行一次(可自行修改，修改即可生效，无需重启)本人红米10x网络掉线frpc也跟着死了，所以必须结合定时启动使用。还有系统的一些其他因素。这里看个人需求，更多定时规则自己百度",
+      "enabled": true,
+      "schedule": "*/50 * * * *",
+      "command": "/data/adb/modules/autofrp/RunAuto/sh/frpc.sh"
+    },
+    {
+      "comment": "热点状态 (默认关闭)由于手机不可控因素，偶尔出现热点自动关闭现象（关闭了还打不开，需要飞行模式），故每三分钟检测一次热点是否开启，如果关闭，则开启飞行模式，搭配xposededge使用(当然也可以通过命令)可实现热点常开(天玑处理器专用)",
+      "enabled": false,
+      "schedule": "*/4 * * * *",
+      "command": "/data/adb/modules/autofrp/RunAuto/sh/hotspot_status.sh"
+    }
+  ]
 }
 
