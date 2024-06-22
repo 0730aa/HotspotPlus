@@ -1,17 +1,13 @@
 {
 
-// 开启 adb 端口，默认端口 5555，需要可自行修改
-// 关闭某个功能 把 true 改成其他值就行
   "start_adb": true,
   "adb_port": 5555,
   
-// 开启 telenet 服务端口，端口号 23
   "start_telnet": true,
   
-// 开启 ftp 服务，默认控制端口号 21
   "start_ftp": true,
   
-// 定时规则配置，请修改完后手动执行模块目录下的 cron_update.sh 文件，执行完立即生效。enabled 是开关，不想要哪个改 false 就行
+
   "cron_jobs": [
     {
       "comment": "test文件定时测试。可在模块目录看到每两分钟有执行一次的 test.log",
