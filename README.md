@@ -14,33 +14,33 @@
 
 - **frpc自启动v3.7**
 
-   引入 jq 工具检索 config
-   config 文件配置新增定时规则设置
-   新增 cron_update
-   新增 service log 日志输出
+   - 引入 jq 工具检索 config
+   - config 文件配置新增定时规则设置
+   - 新增 cron_update
+   - 新增 service log 日志输出
    
 
 
 - **frpc自启动v3.1**
 
-   修改 magisk 模块的一些书写格式
-   修改部分文件名和路径
-   完善模块一些相关说明
-   精简部分脚本内容
+   - 修改 magisk 模块的一些书写格式
+   - 修改部分文件名和路径
+   - 完善模块一些相关说明
+   - 精简部分脚本内容
 
 
 - **frpc自启动v2.6**
 
-   修复了本模块 magisk 的更新逻辑
-   一键启动脚本中将禁用打瞌睡模式的功能注释掉 
+   - 修复了本模块 magisk 的更新逻辑
+   - 一键启动脚本中将禁用打瞌睡模式的功能注释掉 
 
 
 - **frpc自启动v2.4**
 
-   修正文件路径
-   添加 config.json 和 adb.sh 配置文件
-   添加 log 路径，log 不再输出到内存目录下，而是模块的 log 目录下对应文件
-   添加 adb端口开启，ftp 开启，telent 开启的功能
+   - 修正文件路径
+   - 添加 config.json 和 adb.sh 配置文件
+   - 添加 log 路径，log 不再输出到内存目录下，而是模块的 log 目录下对应文件
+   - 添加 adb端口开启，ftp 开启，telent 开启的功能
 
 
 - **frpc自启动v1.0（已废弃，路径没改）**
