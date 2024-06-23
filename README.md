@@ -16,24 +16,17 @@
 
 - **frpc自启动v3.9**
 
-   更新 frpc 到 v0.58.1
-   修正 readme
+   - 更新 frpc 到 v0.58.1
+   - 修正 readme
 
 - **frpc自启动v3.7**
 
-<<<<<<< HEAD
-   引入 jq 工具检索 config
-   config 文件配置新增定时规则设置
-   新增 cron_update
-   新增 service log 日志输出
-=======
    - 引入 jq 工具检索 config
    - config 文件配置新增定时规则设置
    - 新增 cron_update
    - 新增 service log 日志输出
    
 
->>>>>>> d2cd06c48fe8cd669d6c20b1b1c5defc4c78d866
 
 - **frpc自启动v3.1**
 
