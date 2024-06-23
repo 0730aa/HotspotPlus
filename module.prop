@@ -1,6 +1,6 @@
 id=autofrp
 name=frpc自启动
-version=3.7
+version=3.9
 versionCode=3
 author=酷安@nice2cuhhh
 description=frpc客户端开机自启动，定时启动（附加热点检测保持常开，adb端口，ftp服务，telnet服务)

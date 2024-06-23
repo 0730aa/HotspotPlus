@@ -4,13 +4,20 @@
 
 2. 本模块为安卓frpc端开机自动启动和定时启动模块。由于在我的红米安卓12上有不确定因素（好像断网一会之后frp就挂了，故需要搭配定时启动。不需要可自行关闭定时启动，留一个开机自启就好。）
 
-3. 定时启动的配置文件在模块的 autorun_sh/crontabs/root 这个文件里面编辑
+3. 定时启动的配置文件可在模块目录下的 config.json 这个文件里面编辑,编辑完成后手动执行 cron_update.sh 立即生效，或者重启生效。
 
-4. adb 端口，ftp 服务，telnet 服务开关配置在模块目录下的 config.json
+4. adb 端口，ftp 服务，telnet 服务开关配置也在模块目录下的 config.json
 
-5. 附加功能(天玑处理器)，检测热点状态，保持热点常开(默认关闭，需要使用请自行前往autorun_sh/crontabs/root下把注释删了)
+5. 附加功能(天玑处理器)，检测热点状态，保持热点常开(默认关闭)
+
+6. frp 更多特性请自主前往官网查看，https://github.com/fatedier/frp
 
 # 更新日志
+
+- **frpc自启动v3.9**
+
+   更新 frpc 到 v0.58.1
+   修正 readme
 
 - **frpc自启动v3.7**
 
@@ -18,8 +25,6 @@
    config 文件配置新增定时规则设置
    新增 cron_update
    新增 service log 日志输出
-   
-
 
 - **frpc自启动v3.1**
 
