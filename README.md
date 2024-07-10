@@ -13,6 +13,12 @@
 6. frp 更多特性请自主前往官网查看，https://github.com/fatedier/frp
 
 # 更新日志
+- **HotspotPlus_v5.2**
+1. 添加 usb 网络共享 状态检测脚本
+  - 启用和定时规则均在 config 文件里面。
+  - 通过 ifconfig 检测 rndis，从而实现 usb 共享网络保持常开
+  - 该功能默认关闭,需要启用请自行打开
+2. 修正开机自启服务 log 输出，并添加 frpc 的 log 输出
 
 - **HotspotPlus_v5.0**
 
