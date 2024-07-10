@@ -13,27 +13,27 @@
 6. frp 更多特性请自主前往官网查看，https://github.com/fatedier/frp
 
 # 更新日志
-- **HotspotPlus_v5.2**
+- **HotspotPlus_v5.2**
 1. 添加 usb 网络共享 状态检测脚本
-  - 启用和定时规则均在 config 文件里面。
-  - 通过 ifconfig 检测 rndis，从而实现 usb 共享网络保持常开
-  - 该功能默认关闭,需要启用请自行打开
+    - 启用和定时规则均在 config 文件里面。
+    - 通过 ifconfig 检测 rndis，从而实现 usb 共享网络保持常开
+    - 该功能默认关闭,需要启用请自行打开
 2. 修正开机自启服务 log 输出，并添加 frpc 的 log 输出
 
-- **HotspotPlus_v5.0**
+- **HotspotPlus_v5.0**
 
 **本模块从这个版本开始改名为 HotspotPlus（热点机模块）**
 **由于改动较大，刷入前请删除旧版本模块**
 
 1. 添加 keepfrpc 状态检测脚本
-- 现在不再定时运行 frpc 服务，而是通过 pid 检测 frpc 进程是否存在，如果不存在才重新启动。
-- 优化了逻辑，不再一味的运行 frpc
+    - 现在不再定时运行 frpc 服务，而是通过 pid 检测 frpc 进程是否存在，如果不存在才重新启动。
+    - 优化了逻辑，不再一味的运行 frpc
 2. 简化 log 输出
-- 所有的 log 使用覆盖式输出
+    - 所有的 log 使用覆盖式输出
 3. 热点状态检测完善
-- 通过解锁手机实现热点打开，不再依赖 xposededge
+    - 通过解锁手机实现热点打开，不再依赖 xposededge
 4. config 配置更新了部分定时规则时间
-- 由于 frpc 采用了新的检测方式，所以把时间改小
+    - 由于 frpc 采用了新的检测方式，所以把时间改小
 5. 移除 edgefrp.sh
 6. 更新所有的路径，还有部分变量。
 
