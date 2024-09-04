@@ -13,6 +13,19 @@
 6. frp 更多特性请自主前往官网查看，https://github.com/fatedier/frp
 
 # 更新日志
+- **HotspotPlus_v5.5**
+
+   1. 新增手机热点的开机自启动选项（两种模式）
+   2. 精简化热点检测脚本（随 config 选择的模式而操作）
+   3. 缩短开机后脚本执行等待的各种时间
+   4. 修改了 sed 筛选规则，保证其他系统的兼容性
+
+- **HotspotPlus_v5.3**
+
+   1. 添加 USB 网络共享模式的开机自启动选项（config里面打开）
+        - 配置请在 config.json 里面打开(默认关闭)
+   2. 开机log增加 additional 的相关服务是否开启的 log
+   3. 完善了相关服务的注释
 - **HotspotPlus_v5.2**
 1. 添加 usb 网络共享 状态检测脚本
     - 启用和定时规则均在 config 文件里面。
