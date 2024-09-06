@@ -13,6 +13,11 @@
 6. frp 更多特性请自主前往官网查看，https://github.com/fatedier/frp
 
 # 更新日志
+- **HotspotPlus_v5.6**
+
+   1. 修复了热点模式一某些场景下出现打开失败的bug
+   2. 再次缩短各种服务启动的等待时间
+      
 - **HotspotPlus_v5.5**
 
    1. 新增手机热点的开机自启动选项（两种模式）
