@@ -13,6 +13,12 @@
 6. frp 更多特性请自主前往官网查看，https://github.com/fatedier/frp
 
 # 更新日志
+
+- **HotspotPlus_v5.7**
+
+   1. 修复了部分系统adb端口读取不到
+      - 全部采用 jq 解析
+
 - **HotspotPlus_v5.6**
 
    1. 修复了热点模式一某些场景下出现打开失败的bug
