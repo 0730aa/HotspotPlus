@@ -52,6 +52,13 @@ frpc 更多特性详情查看官网 https://github.com/fatedier/frp
 
 
 # 更新日志
+
+- **HotspotPlus_v6.0**
+
+   1. 新增开关控制，在面具那里点击启用或者关闭模块就可以控制
+     - 也可以在模块目录下的sh文件夹里一键打开和关闭的脚本
+   2. additional 文件更改逻辑
+
 - **HotspotPlus_v5.7**
 
    1. 修复了部分系统adb端口读取不到
