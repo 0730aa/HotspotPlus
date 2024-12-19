@@ -52,6 +52,11 @@ frpc 更多特性详情查看官网 https://github.com/fatedier/frp
 
 # 更新日志
 
+
+- **HotspotPlus_v6.3**
+
+   1. 新增短信转发功能，通过 smtp 发送到相应的邮箱
+
 - **HotspotPlus_v6.0**
 
    1. 新增开关控制，在面具那里点击启用或者关闭模块就可以控制
