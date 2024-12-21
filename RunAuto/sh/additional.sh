@@ -1,10 +1,21 @@
 #!/system/bin/sh
-CONFIG_FILE="/data/adb/modules/autofrp/config.json"
+CONFIG_FILE="/data/adb/modules/HotspotPlus/config.json"
+CLEANED_JSON=$(sed 's/\/\/.*$//' "$CONFIG_FILE" | sed '/^[ \t]*$/d')
 # 获取配置文件的值
-START_ADB=$(cat $CONFIG_FILE | grep -o '"start_adb": *true' | wc -l)
-ADB_PORT=$(cat $CONFIG_FILE | grep -o '"adb_port": *[0-9]*' | grep -o '[0-9]*')
-START_TELNET=$(cat $CONFIG_FILE | grep -o '"start_telnet": *true' | wc -l)
-START_FTP=$(grep -o '"start_ftp": *true' $CONFIG_FILE | wc -l)
+START_ADB=$(echo "$CLEANED_JSON" | /data/adb/modules/HotspotPlus/bin/jq -r '.start_adb // false')
+ADB_PORT=$(echo "$CLEANED_JSON" | /data/adb/modules/HotspotPlus/bin/jq -r '.adb_port')
+START_TELNET=$(echo "$CLEANED_JSON" | /data/adb/modules/HotspotPlus/bin/jq -r '.start_telnet // false')
+START_FTP=$(echo "$CLEANED_JSON" | /data/adb/modules/HotspotPlus/bin/jq -r '.start_ftp // false')
+START_AP=$(echo "$CLEANED_JSON" | /data/adb/modules/HotspotPlus/bin/jq -r '.start_ap')
+START_RNDIS=$(echo "$CLEANED_JSON" | /data/adb/modules/HotspotPlus/bin/jq -r '.start_rndis // false')
+hotspot_status=$(ifconfig | grep "ap0")
+
+
+START_ADB=$([ "$START_ADB" = "true" ] && echo 1 || echo 0)
+START_TELNET=$([ "$START_TELNET" = "true" ] && echo 1 || echo 0)
+START_FTP=$([ "$START_FTP" = "true" ] && echo 1 || echo 0)
+START_RNDIS=$([ "$START_RNDIS" = "true" ] && echo 1 || echo 0)
+
 
 if [ $START_ADB -eq 1 ]; then
   stop adbd
@@ -24,8 +35,59 @@ else
 fi
 
 if [ $START_FTP -eq 1 ]; then
-    /data/adb/magisk/busybox tcpsvd -vE 0.0.0.0 21 /data/adb/magisk/busybox ftpd -wA / &
+    /data/adb/magisk/busybox tcpsvd -vE 0.0.0.0 21 /data/adb/magisk/busybox ftpd -wA / &> /dev/null &
     echo "FTP 已开启"
 else
     echo "FTP 未开启"
+fi
+
+if [ "$START_AP" = "mode2" ]; then
+    AP_SSID=$(echo "$CLEANED_JSON" | /data/adb/modules/HotspotPlus/bin/jq -r '.ap_mode2.ap_ssid')
+    OPEN=$(echo "$CLEANED_JSON" | /data/adb/modules/HotspotPlus/bin/jq -r '.ap_mode2.open')
+    ENCRYPTION=$(echo "$CLEANED_JSON" | /data/adb/modules/HotspotPlus/bin/jq -r '.ap_mode2.encryption')
+    PASSWORD=$(echo "$CLEANED_JSON" | /data/adb/modules/HotspotPlus/bin/jq -r '.ap_mode2.password')
+    BAND=$(echo "$CLEANED_JSON" | /data/adb/modules/HotspotPlus/bin/jq -r '.ap_mode2.band')
+    
+    if [ "$OPEN" = "true" ]; then
+        CMD="cmd wifi start-softap $AP_SSID open -b$BAND"
+    else
+        CMD="cmd wifi start-softap $AP_SSID $ENCRYPTION $PASSWORD -b$BAND"
+    fi
+    echo "Executing: $CMD"
+    $CMD
+    echo "热点已打开（模式二）: $CMD"
+fi
+
+if [ -z "$hotspot_status" ]; then
+  if [ "$START_AP" = "mode1" ]; then
+  # 检查屏幕状态
+    SCREEN_STATUS=$(dumpsys power | grep 'mHoldingDisplaySuspendBlocker' | awk -F= '{print $2}')
+  
+    if [ "$SCREEN_STATUS" = "true" ]; then
+      echo "屏幕已亮，无需唤醒"
+    # 保险起见，尝试上滑解锁
+      input swipe 300 1000 300 500
+    else
+      echo "屏幕未亮，唤醒屏幕"
+      input keyevent 26  # 唤醒屏幕
+      sleep 1 
+      input swipe 300 1000 300 500 # 上滑解锁屏幕
+      sleep 3
+    fi
+  # 进入热点设置，打开热点
+    am start -n com.android.settings/.TetherSettings
+    input keyevent 20
+    input keyevent 66
+  
+    echo "热点已打开（模式一）"
+  fi
+else
+  echo "热点已经打开"
+fi
+
+if [ $START_RNDIS -eq 1 ]; then
+  svc usb setFunctions rndis
+  echo "USB网络共享已打开"
+else
+  echo "USB网络共享已关闭"
 fi

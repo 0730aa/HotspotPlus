@@ -1,6 +1,6 @@
-id=autofrp
-name=frpc自启动
-version=3.9
-versionCode=3
+id=HotspotPlus
+name=热点机模块
+version=6.3
+versionCode=6
 author=酷安@nice2cuhhh
-description=frpc客户端开机自启动，定时启动（附加热点检测保持常开，adb端口，ftp服务，telnet服务)
+description=frpc客户端开机自启动定时启动。开机自启: 手机热点，adb端口、ftp服务、telnet服务、USB网络共享模式以及短信转发

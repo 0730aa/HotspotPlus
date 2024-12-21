@@ -1,8 +1,8 @@
 #!/system/bin/sh
 set -e  # 遇到错误立即退出
 
-CONFIG_FILE="/data/adb/modules/autofrp/config.json"
-CRON_FILE="/data/adb/modules/autofrp/RunAuto/crontabs/root"
+CONFIG_FILE="/data/adb/modules/HotspotPlus/config.json"
+CRON_FILE="/data/adb/modules/HotspotPlus/RunAuto/crontabs/root"
 
 # 检查配置文件是否存在
 if [ ! -f "$CONFIG_FILE" ]; then
@@ -13,14 +13,14 @@ fi
 # 直接处理配置文件并输出到 CRON_FILE
 {
     sed 's/\/\/.*$//' "$CONFIG_FILE" | \
-    sed '/^\s*$/d' | \
-    /data/adb/modules/autofrp/jq -c '.cron_jobs[]' | \
+    sed '/^[ \t]*$/d' | \
+    /data/adb/modules/HotspotPlus/bin/jq -c '.cron_jobs[]' | \
     while read -r job; do
-        ENABLED=$(echo "$job" | /data/adb/modules/autofrp/jq -r '.enabled')
+        ENABLED=$(echo "$job" | /data/adb/modules/HotspotPlus/bin/jq -r '.enabled')
         if [ "$ENABLED" = "true" ]; then
-            COMMENT=$(echo "$job" | /data/adb/modules/autofrp/jq -r '.comment')
-            SCHEDULE=$(echo "$job" | /data/adb/modules/autofrp/jq -r '.schedule')
-            COMMAND=$(echo "$job" | /data/adb/modules/autofrp/jq -r '.command')
+            COMMENT=$(echo "$job" | /data/adb/modules/HotspotPlus/bin/jq -r '.comment')
+            SCHEDULE=$(echo "$job" | /data/adb/modules/HotspotPlus/bin/jq -r '.schedule')
+            COMMAND=$(echo "$job" | /data/adb/modules/HotspotPlus/bin/jq -r '.command')
             echo "# $COMMENT"
             echo "$SCHEDULE $COMMAND"
         fi

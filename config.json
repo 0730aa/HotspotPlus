@@ -1,32 +1,94 @@
 {
 
+// 所有功能可在这里开启或者关闭，需要启用则把值设为 true，需要关闭设为 false
+
+
+// 开启 adb 端口，默认端口 5555，需要可自行修改
   "start_adb": true,
   "adb_port": 5555,
   
+// 开启 telenet 服务端口，端口号 23
   "start_telnet": true,
   
+// 开启 ftp 服务，默认控制端口号 21
   "start_ftp": true,
-  
 
+  
+// 开启开机自动打开热点，有两种模式（默认选择模式一）
+
+// 模式一(不推荐，鸡肋，有时候不听话): 通过解锁手机屏幕来打开热点。此法局限性在于只能解锁无密码的手机，有密码不适用。
+// 模式二: 通过命令行打开热点，需要重新设定热点名称，密码，以及加密方式等，等于重新创建一个热点，而非通过设置来打开热点。下面的 ap_mode2 就是专门用来设置名称密码加密之类的
+
+   "start_ap": "mode1",   // 此处可选值为 mode1/mode2。如果选择了 mode2 需要填写下面的热点信息。如果填了 false 则关闭此功能，并且连同下面的热点定时检测也失效
+   
+   "ap_mode2": {
+       "ap_ssid": "hotspotplus",  // 热点名称
+       "open": false,           // 是否为开放式热点，true为开放
+       "encryption": "wpa2",   // 加密方式，wpa2/wpa3
+       "password": "88888888", // 热点密码，上面如果选了开放热点这里可以不用管
+       "band": 5              // 热点频段，可选值为5或2。填 5 为 5Ghz 频段热点，填 2 为 2.4Ghz 频段
+     },
+     
+     
+// 开启开机自动打开 USB 网络共享模式(默认关闭)
+  "start_rndis": false,
+
+
+
+// 这个功能可以忽略（默认关闭），自用。当热点自动关闭后需要先开启飞行模式再打开热点(与热点定时检测使用)。如果你的热点也会自动关闭并且无法再次打开，启用此模式可能会解决问题
+  "airmode": false,
+
+
+// 定时规则配置，请修改完后手动执行模块目录下的 cron_update.sh 文件，执行完立即生效。enabled 是开关，不想要哪个改 false 就行。schedule 是 cron 定时规则，更多规则自主百度
   "cron_jobs": [
     {
-      "comment": "test文件定时测试。可在模块目录看到每两分钟有执行一次的 test.log",
+      "comment": "test文件定时测试（默认打开）。每2分钟运行一次。可在模块目录看到每两分钟有执行一次的 test.log",
       "enabled": true,
-      "schedule": "*/4 * * * *",
-      "command": "/data/adb/modules/autofrp/RunAuto/sh/test.sh"
+      "schedule": "*/2 * * * *",
+      "command": "/data/adb/modules/HotspotPlus/RunAuto/sh/test.sh"
     },   
     {
-      "comment": "frpc定时启动。每50分钟运行一次(可自行修改，修改即可生效，无需重启)本人红米10x网络掉线frpc也跟着死了，所以必须结合定时启动使用。还有系统的一些其他因素。这里看个人需求，更多定时规则自己百度",
+      "comment": "frpc 进程定时检测（默认打开）。每 5 分钟检测一次 frpc 进程是否存在，不存在的话就按照脚本逻辑，重新启动 frpc。已经存在就不操作",
       "enabled": true,
-      "schedule": "*/50 * * * *",
-      "command": "/data/adb/modules/autofrp/RunAuto/sh/frpc.sh"
+      "schedule": "*/5 * * * *",
+      "command": "/data/adb/modules/HotspotPlus/RunAuto/sh/keepfrpc.sh"
     },
     {
-      "comment": "热点状态 (默认关闭)由于手机不可控因素，偶尔出现热点自动关闭现象（关闭了还打不开，需要飞行模式），故每三分钟检测一次热点是否开启，如果关闭，则开启飞行模式，搭配xposededge使用(当然也可以通过命令)可实现热点常开(天玑处理器专用)",
+      "comment": "热点状态检测 (默认关闭)。开启方式按照上方选的开机自启热点的模式。每 3 分钟检测一次热点是否开启，如果关闭，则开启飞行模式(当上面的 airmode 为 ture 时才会开启飞行模式，否则不会开飞行模式，直接执行开热点命令)，延时 10s 后关闭飞行模式并打开热点",
       "enabled": false,
-      "schedule": "*/4 * * * *",
-      "command": "/data/adb/modules/autofrp/RunAuto/sh/hotspot_status.sh"
+      "schedule": "*/3 * * * *",
+      "command": "/data/adb/modules/HotspotPlus/RunAuto/sh/hotspot_status.sh"
+    },
+    {
+      "comment": "USB 网络共享检测（默认关闭）每过 2 分钟自动检测 USB共享 是否打开，如果关闭则执行打开命令，已经打开则不作动作",
+      "enabled": false,
+      "schedule": "*/2 * * * *",
+      "command": "/data/adb/modules/HotspotPlus/RunAuto/sh/rndis_status.sh"
     }
-  ]
+  ],
+  
+  // 以下为短信转发配置（当有新的短信时，会立即转发到指定邮件）。目前处于测试阶段，已测试微软邮件转发到qq邮件成功  
+  
+  "sms_forwarding_enabled": false,  // 短信转发功能的总开关控制（默认关闭）
+  
+  "sms_setting": {
+    "defaults": {
+      "tls": "on",
+      "tls_trust_file": "/data/adb/magisk/test/bin/ca-certificates.crt",
+      "logfile": "/data/adb/modules/HotspotPlus/log/SmsRun.log"
+    },
+    "account": {
+      "name": "outlook", 
+      "host": "smtp-mail.outlook.com", //发送者的邮件提供商 smtp 主机地址
+      "port": 587,  // smtp 的端口号，不明白的可以百度
+      "auth": "on", // 保持默认即可
+      "user": "YouAccount@outlook.com", //发送者的邮箱账号
+      "password": "YouPassword", //发送者的邮箱密码
+      "from": "YouAccount@outlook.com" //最好与上方 user 账号一致
+    },
+    "email_settings": {
+      "to_email": "receive@qq.com" //接收方邮件地址
+    }
+  }
 }
 
