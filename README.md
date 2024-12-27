@@ -44,7 +44,7 @@
 
 7. rndis_status.sh 是 USB 共享网络状态检测，通过 ifconfig 命令检测。
 
-8. sms.sh 是提供短信转发服务，运行后会一直在监听本机短信库的ID，当有新的短信到来时，会通过 smtp 转发到接受者的邮箱账号上。
+8. sms.sh 是提供短信转发服务，运行后会一直在监听本机短信库的ID，当有新的短信到来时，会通过 smtp 或 Webhook 转发到接受者的邮箱账号上。
 
 # 参考工具
 本模块内置了 jq 工具来读取处理 json 文件，更多详情前往 https://github.com/jqlang/jq 查看
