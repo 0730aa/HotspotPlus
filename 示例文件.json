@@ -1,0 +1,108 @@
+注意本文件仅提供参考，参考后请修改 config.json 。模块最终是读取 config.json 这个文件的
+
+{
+
+// 所有功能可在这里开启或者关闭，需要启用则把值设为 true，需要关闭设为 false
+
+
+// 开启 adb 端口，默认端口 5555，需要可自行修改
+  "start_adb": true,
+  "adb_port": 5555,
+  
+// 开启 telenet 服务端口，端口号 23
+  "start_telnet": true,
+  
+// 开启 ftp 服务，默认控制端口号 21
+  "start_ftp": true,
+
+  
+// 开启开机自动打开热点，有两种模式（默认选择模式一）
+
+// 模式一(不推荐，鸡肋，有时候不听话): 通过解锁手机屏幕来打开热点。此法局限性在于只能解锁无密码的手机，有密码不适用。
+// 模式二: 通过命令行打开热点，需要重新设定热点名称，密码，以及加密方式等，等于重新创建一个热点，而非通过设置来打开热点。下面的 ap_mode2 就是专门用来设置名称密码加密之类的
+
+   "start_ap": "mode1",   // 此处可选值为 mode1/mode2。如果选择了 mode2 需要填写下面的热点信息。如果填了 false 则关闭此功能，并且连同下面的热点定时检测也失效
+   
+   "ap_mode2": {
+       "ap_ssid": "hotspotplus",  // 热点名称
+       "open": false,           // 是否为开放式热点，true为开放
+       "encryption": "wpa2",   // 加密方式，wpa2/wpa3
+       "password": "88888888", // 热点密码，上面如果选了开放热点这里可以不用管
+       "band": 5              // 热点频段，可选值为5或2。填 5 为 5Ghz 频段热点，填 2 为 2.4Ghz 频段
+     },
+     
+     
+// 开启开机自动打开 USB 网络共享模式(默认关闭)
+  "start_rndis": false,
+
+
+
+// 这个功能可以忽略（默认关闭），自用。当热点自动关闭后需要先开启飞行模式再打开热点(与热点定时检测使用)。如果你的热点也会自动关闭并且无法再次打开，启用此模式可能会解决问题
+  "airmode": false,
+
+
+// 定时规则配置，请修改完后手动执行模块目录下的 cron_update.sh 文件，执行完立即生效。enabled 是开关，不想要哪个改 false 就行。schedule 是 cron 定时规则，更多规则自主百度
+  "cron_jobs": [
+    {
+      "comment": "test文件定时测试（默认打开）。每2分钟运行一次。可在模块目录看到每两分钟有执行一次的 test.log",
+      "enabled": true,
+      "schedule": "*/2 * * * *",
+      "command": "/data/adb/modules/HotspotPlus/RunAuto/sh/test.sh"
+    },   
+    {
+      "comment": "frpc 进程定时检测（默认打开）。每 5 分钟检测一次 frpc 进程是否存在，不存在的话就按照脚本逻辑，重新启动 frpc。已经存在就不操作",
+      "enabled": true,
+      "schedule": "*/5 * * * *",
+      "command": "/data/adb/modules/HotspotPlus/RunAuto/sh/keepfrpc.sh"
+    },
+    {
+      "comment": "热点状态检测 (默认关闭)。开启方式按照上方选的开机自启热点的模式。每 3 分钟检测一次热点是否开启，如果关闭，则开启飞行模式(当上面的 airmode 为 ture 时才会开启飞行模式，否则不会开飞行模式，直接执行开热点命令)，延时 10s 后关闭飞行模式并打开热点",
+      "enabled": false,
+      "schedule": "*/3 * * * *",
+      "command": "/data/adb/modules/HotspotPlus/RunAuto/sh/hotspot_status.sh"
+    },
+    {
+      "comment": "USB 网络共享检测（默认关闭）每过 2 分钟自动检测 USB共享 是否打开，如果关闭则执行打开命令，已经打开则不作动作",
+      "enabled": false,
+      "schedule": "*/2 * * * *",
+      "command": "/data/adb/modules/HotspotPlus/RunAuto/sh/rndis_status.sh"
+    }
+  ],
+  
+  // 以下为短信转发配置（当有新的短信时，会立即转发到指定邮件）。目前处于测试阶段
+  "sms_forwarding_enabled": false,  // 短信转发功能的总开关控制（默认关闭）
+ 
+ 
+     
+  // webhook 方式转发(目前使用的curl以及动态库都是基于 mt管理器的，所以请使用 webhook 时安装 mt管理器，并且打开过 mt管理器里面的终端模拟器才能加载这个 curl 库)。
+  
+  // 已测企业微信机器人和钉钉机器人，其他自测
+  
+  //请获取链接后填到下面 url 就可以。钉钉的话关键词增加一个 ＂号码＂ 这两个词，需要其他关键词自己翻 sms.sh 文件把里面内容改一下再自定义关键词 
+  "webhook": {
+    "url": "https://oapi.dingtalk.com/robot/send?access_token"
+  },
+
+
+  
+// 以下为 smtp 转发方式的配置。已测试谷歌邮件转发到qq邮件成功，微软E5账号转发也可以成功(但是普通微软邮箱不行，更改验证方式了)   
+  "smtp_setting": {
+    "defaults": {
+      "tls": "on",
+      "tls_trust_file": "/data/adb/modules/HotspotPlus/bin/ca-certificates.crt",
+      "logfile": "/data/adb/modules/HotspotPlus/log/SmsRun.log"
+    },
+    "account": {
+      "name": "outlook", 
+      "host": "smtp-mail.outlook.com", //发送者的邮件提供商 smtp 主机地址
+      "port": 587,  // smtp 的端口号，不明白的可以百度
+      "auth": "on", // 保持默认即可
+      "user": "YouAccount@outlook.com", //发送者的邮箱账号
+      "password": "YouPassword", //发送者的邮箱密码
+      "from": "YouAccount@outlook.com" //最好与上方 user 账号一致
+    },
+    "email_settings": {
+      "to_email": "receive@qq.com" //接收方邮件地址
+    }
+  }
+}
