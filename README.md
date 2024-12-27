@@ -10,7 +10,7 @@
 5. 附加功能(天玑处理器)，检测热点状态，保持热点常开(默认关闭)
 
 6. frp 更多特性请自主前往官网查看，https://github.com/fatedier/frp
-
+7. 模块支持短信转发两种方式: Webhook 和 SMTP。详细配置请参考示例文件
 
 # 使用方法
 1. 下载 HotspotPlus 模块
