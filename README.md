@@ -56,6 +56,12 @@ frpc 更多特性详情查看官网 https://github.com/fatedier/frp
 # 更新日志
 
 
+- **HotspotPlus_v6.7
+
+1. 新增短信转发方式 Webhook，目前已测试好企业微信机器人、钉钉机器人（关键词模式）
+2. config 注释删了，增加一个示例文件参考对比修改
+3. 大部分文件更改
+
 - **HotspotPlus_v6.3**
 
    1. 新增短信转发功能，通过 smtp 发送到相应的邮箱
