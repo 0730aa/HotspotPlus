@@ -15,7 +15,7 @@
 # 使用方法
 1. 下载 HotspotPlus 模块
 
-2. 刷入 magisk 后把 示例文件.jsonhttps://github.com/0730aa/HotspotPlus/blob/7017906531853cc8b833b3ebba5a98f3e15017a1/%E7%A4%BA%E4%BE%8B%E6%96%87%E4%BB%B6.json 熟读然后再更改 config.json。frp相关配置在单独文件夹里。本模块不保证 frp 最新版，需要最新版请自行下载后放入 frp 文件夹下即可。
+2. 刷入 magisk 后把 [示例文件.json](./示例文件.json) 熟读然后再更改 config.json。frp相关配置在单独文件夹里。本模块不保证 frp 最新版，需要最新版请自行下载后放入 frp 文件夹下即可。
 
 3. adb，ftp，telnet ，热点，USB网络共享服务开启只需在 config.json 里设置就好（部分服务默认打开）
 
