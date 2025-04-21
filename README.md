@@ -63,7 +63,7 @@ frpc 更多特性详情查看官网 https://github.com/fatedier/frp
 
 - **HotspotPlus_v6.3**
 
-   1. 新增短信转发功能，通过 smtp 发送到相应的邮箱
+   1. 新增短信转发功能，通过 smtp 发送到相应的邮箱（依赖termux的lib库，需自带termux app，无需运行，安装有即可）
 
 - **HotspotPlus_v6.0**
 
