@@ -13,7 +13,8 @@
 7. 模块支持短信转发两种方式: Webhook 和 SMTP。详细配置请参考示例文件（注：短信转发功能依赖termux的lib库，所以需要手机自带一个 termux app，无需保持运行，安装有即可）
 
 # 使用方法
-1. 下载 HotspotPlus 模块
+1. 下载 HotspotPlus 模块（Github有时候更新不及时，可前往蓝奏云 https://wwku.lanzouo.com/b00g2dgwmd 
+密码:投币）
 
 2. 刷入 magisk 后把 [示例文件.json](./示例文件.json) 熟读然后再更改 config.json。frp相关配置在单独文件夹里。本模块不保证 frp 最新版，需要最新版请自行下载后放入 frp 文件夹下即可。
 
