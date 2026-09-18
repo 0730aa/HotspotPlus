@@ -30,7 +30,10 @@ if [ -z "$hotspot_status" ]; then
   fi
   
   # 开启热点，模式读取 config 文件里面
-  if [ "$START_AP" = "mode2" ]; then
+  if [ "$START_AP" = "api" ]; then
+    echo "$CURRENT_TIME - 通用模式(api)重新打开热点" | tee -a "$LOG_FILE"
+    /data/adb/modules/HotspotPlus/RunAuto/sh/open_hotspot.sh on
+  elif [ "$START_AP" = "mode2" ]; then
     AP_SSID=$(/data/adb/modules/HotspotPlus/bin/jq -r '.ap_mode2.ap_ssid' "$CONFIG_FILE")
     OPEN=$(/data/adb/modules/HotspotPlus/bin/jq -r '.ap_mode2.open' "$CONFIG_FILE")
     ENCRYPTION=$(/data/adb/modules/HotspotPlus/bin/jq -r '.ap_mode2.encryption' "$CONFIG_FILE")

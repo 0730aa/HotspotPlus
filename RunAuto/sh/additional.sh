@@ -58,6 +58,12 @@ if [ "$START_AP" = "mode2" ]; then
   echo "热点已打开（模式二）: $CMD"
 fi
 
+# 通用模式(api): 调系统 tethering API 开真热点，失败自动回退 cmd/UI
+if [ "$START_AP" = "api" ]; then
+  echo "使用通用模式(api)开启热点"
+  /data/adb/modules/HotspotPlus/RunAuto/sh/open_hotspot.sh on
+fi
+
 if [ -z "$hotspot_status" ]; then
   if [ "$START_AP" = "mode1" ]; then
 
