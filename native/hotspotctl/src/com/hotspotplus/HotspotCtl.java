@@ -1,237 +1,148 @@
 package com.hotspotplus;
 
 import java.lang.reflect.Constructor;
-import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
-import java.lang.reflect.Proxy;
 
 /**
- * HotspotCtl —— 通过 app_process 以 root 运行，调用系统自身的
- * tethering / softap API 来开关"带网络共享的真热点"，尽量做到跨版本通用。
+ * HotspotCtl —— 通过 app_process 以 root 运行，直接经 ServiceManager 拿到系统
+ * connectivity 服务的 binder，调用 IConnectivityManager.startTethering / stopTethering
+ * 来开关"带网络共享的真热点"。不创建 Context、不走 ActivityThread.systemMain，
+ * 以规避 MIUI 等 ROM 在 Resources.getSystem() 阶段的崩溃。
  *
+ * 适用: Android 7~10(API 24~29) 的 connectivity.startTethering；部分 11 也可尝试。
  * 用法(由 open_hotspot.sh 调起):
- *   app_process -Djava.class.path=hotspotctl.dex /system/bin com.hotspotplus.HotspotCtl on
- *   app_process -Djava.class.path=hotspotctl.dex /system/bin com.hotspotplus.HotspotCtl off
- *
- * 说明:
- *  - "on" 打开的是用户在系统设置里已配置好的热点(SSID/密码/加密沿用系统设置)，
- *    这是系统"个人热点"开关走的同一条路，兼容性最好。
- *  - 真正是否成功由外层脚本用 ifconfig 查 ap0 判定；本程序只负责发起调用并打日志。
+ *   CLASSPATH=hotspotctl.dex app_process /system/bin com.hotspotplus.HotspotCtl on|off
+ * 是否真的成功由外层脚本用 ifconfig 查 ap0 判定。
  */
 public final class HotspotCtl {
 
     private static final int TETHERING_WIFI = 0;
+    private static final String[] PKG_CANDIDATES = { "com.android.shell", "android", null };
 
-    private static void log(String msg) {
-        System.out.println("[hotspotctl] " + msg);
-    }
+    private static void log(String m) { System.out.println("[hotspotctl] " + m); }
 
     public static void main(String[] args) {
         String action = (args != null && args.length > 0) ? args[0] : "on";
-        log("start action=" + action + " sdk=" + getSdkInt());
+        int sdk = getSdkInt();
+        log("start action=" + action + " sdk=" + sdk);
 
-        Object ctx = getSystemContext();
-        if (ctx == null) {
-            log("FATAL 无法获取 system context，退出");
-            System.exit(2);
-            return;
-        }
-        ensureLooper();
-
-        boolean issued;
+        boolean ok;
         if ("off".equalsIgnoreCase(action)) {
-            issued = stopTethering(ctx);
+            ok = connectivityBinder(false);
         } else {
-            issued = startTethering(ctx);
+            ok = connectivityBinder(true);
         }
-        log("done issued=" + issued + " (最终是否成功以 ap0 检测为准)");
-        // 给异步回调一点点时间打印，但不阻塞太久
-        sleep(800);
-        System.exit(issued ? 0 : 1);
+        log("done issued=" + ok + " (最终是否成功以 ap0 检测为准)");
+        sleep(600);
+        System.exit(ok ? 0 : 1);
     }
 
-    // ---------------------------------------------------------------
-    // 打开热点：按 API 从新到旧依次尝试
-    // ---------------------------------------------------------------
-    private static boolean startTethering(Object ctx) {
-        boolean ok = false;
-        // 1) Android 11+ : TetheringManager.startTethering(request, executor, callback)
-        if (tryTetheringManagerStart(ctx)) ok = true;
-        // 2) Android 7~10 : ConnectivityManager.startTethering(type, showUi, callback)
-        if (!ok && tryConnectivityManagerStart(ctx)) ok = true;
-        // 3) 老机型兜底 : WifiManager.setWifiApEnabled(null, true)
-        if (!ok && tryLegacyWifiApEnable(ctx, true)) ok = true;
-        return ok;
-    }
-
-    private static boolean stopTethering(Object ctx) {
-        boolean ok = false;
-        if (tryTetheringManagerStop(ctx)) ok = true;
-        if (!ok && tryConnectivityManagerStop(ctx)) ok = true;
-        if (!ok && tryLegacyWifiApEnable(ctx, false)) ok = true;
-        return ok;
-    }
-
-    // ---- 1) TetheringManager (API 30+) ----
-    private static boolean tryTetheringManagerStart(Object ctx) {
+    // 直连 connectivity 服务的 binder 调 start/stopTethering
+    private static boolean connectivityBinder(boolean on) {
         try {
-            Object tm = getSystemService(ctx, "tethering");
-            if (tm == null) { log("TetheringManager: 服务为 null，跳过"); return false; }
+            Object binder = getService("connectivity");
+            if (binder == null) { log("connectivity 服务 binder=null"); return false; }
 
-            Class<?> reqCls = Class.forName("android.net.TetheringManager$TetheringRequest");
-            Class<?> builderCls = Class.forName("android.net.TetheringManager$TetheringRequest$Builder");
-            Constructor<?> bctor = builderCls.getConstructor(int.class);
-            Object builder = bctor.newInstance(TETHERING_WIFI);
-            Object request = builderCls.getMethod("build").invoke(builder);
+            Class<?> ibinder = Class.forName("android.os.IBinder");
+            Class<?> stub = Class.forName("android.net.IConnectivityManager$Stub");
+            Object icm = stub.getMethod("asInterface", ibinder).invoke(null, binder);
+            Class<?> icmCls = Class.forName("android.net.IConnectivityManager");
 
-            Class<?> cbCls = Class.forName("android.net.TetheringManager$StartTetheringCallback");
-            Object cb = Proxy.newProxyInstance(cbCls.getClassLoader(),
-                    new Class[]{cbCls}, new CbHandler("TetheringManager"));
+            String name = on ? "startTethering" : "stopTethering";
+            Method m = findLongest(icmCls, name);
+            if (m == null) { log("未找到方法 " + name); return false; }
+            Class<?>[] pt = m.getParameterTypes();
+            log(name + " 签名参数数=" + pt.length + " -> " + typeNames(pt));
 
-            java.util.concurrent.Executor exec = new java.util.concurrent.Executor() {
-                public void execute(Runnable r) { r.run(); }
-            };
-
-            Method start = tm.getClass().getMethod("startTethering",
-                    reqCls, java.util.concurrent.Executor.class, cbCls);
-            start.invoke(tm, request, exec, cb);
-            log("TetheringManager.startTethering 已发起");
-            return true;
-        } catch (Throwable t) {
-            log("TetheringManager 失败: " + t);
-            return false;
-        }
-    }
-
-    private static boolean tryTetheringManagerStop(Object ctx) {
-        try {
-            Object tm = getSystemService(ctx, "tethering");
-            if (tm == null) return false;
-            Method stop = tm.getClass().getMethod("stopTethering", int.class);
-            stop.invoke(tm, TETHERING_WIFI);
-            log("TetheringManager.stopTethering 已发起");
-            return true;
-        } catch (Throwable t) {
-            log("TetheringManager.stop 失败: " + t);
-            return false;
-        }
-    }
-
-    // ---- 2) ConnectivityManager (API 24~29) ----
-    private static boolean tryConnectivityManagerStart(Object ctx) {
-        try {
-            Object cm = getSystemService(ctx, "connectivity");
-            if (cm == null) { log("ConnectivityManager: 服务为 null，跳过"); return false; }
-            Class<?> cbCls = Class.forName("android.net.ConnectivityManager$OnStartTetheringCallback");
-            Object cb = new StartCb();
-            Method start = cm.getClass().getMethod("startTethering", int.class, boolean.class, cbCls);
-            start.invoke(cm, TETHERING_WIFI, false, cb);
-            log("ConnectivityManager.startTethering 已发起");
-            return true;
-        } catch (Throwable t) {
-            log("ConnectivityManager 失败: " + t);
-            return false;
-        }
-    }
-
-    private static boolean tryConnectivityManagerStop(Object ctx) {
-        try {
-            Object cm = getSystemService(ctx, "connectivity");
-            if (cm == null) return false;
-            Method stop = cm.getClass().getMethod("stopTethering", int.class);
-            stop.invoke(cm, TETHERING_WIFI);
-            log("ConnectivityManager.stopTethering 已发起");
-            return true;
-        } catch (Throwable t) {
-            log("ConnectivityManager.stop 失败: " + t);
-            return false;
-        }
-    }
-
-    // ---- 3) 老机型 WifiManager.setWifiApEnabled (API <= 25) ----
-    private static boolean tryLegacyWifiApEnable(Object ctx, boolean enable) {
-        try {
-            Object wm = getSystemService(ctx, "wifi");
-            if (wm == null) return false;
-            Class<?> wcCls = Class.forName("android.net.wifi.WifiConfiguration");
-            Method m = wm.getClass().getMethod("setWifiApEnabled", wcCls, boolean.class);
-            Object ret = m.invoke(wm, null, enable);
-            log("WifiManager.setWifiApEnabled(" + enable + ") 返回 " + ret);
-            return Boolean.TRUE.equals(ret);
-        } catch (Throwable t) {
-            log("Legacy setWifiApEnabled 失败: " + t);
-            return false;
-        }
-    }
-
-    // ---------------------------------------------------------------
-    // 反射工具
-    // ---------------------------------------------------------------
-    private static Object getSystemContext() {
-        try {
-            Class<?> at = Class.forName("android.app.ActivityThread");
-            Object thread = at.getMethod("systemMain").invoke(null);
-            Object ctx = at.getMethod("getSystemContext").invoke(thread);
-            log("获取 system context: " + (ctx != null));
-            return ctx;
-        } catch (Throwable t) {
-            log("getSystemContext 失败: " + t);
-            return null;
-        }
-    }
-
-    private static Object getSystemService(Object ctx, String name) {
-        try {
-            Method m = ctx.getClass().getMethod("getSystemService", String.class);
-            return m.invoke(ctx, name);
-        } catch (Throwable t) {
-            log("getSystemService(" + name + ") 失败: " + t);
-            return null;
-        }
-    }
-
-    private static void ensureLooper() {
-        try {
-            Class<?> looper = Class.forName("android.os.Looper");
-            Object cur = looper.getMethod("myLooper").invoke(null);
-            if (cur == null) {
-                try { looper.getMethod("prepareMainLooper").invoke(null); }
-                catch (Throwable e) { looper.getMethod("prepare").invoke(null); }
-                log("已准备 Looper");
+            Object rr = on ? newResultReceiver() : null;
+            for (int i = 0; i < PKG_CANDIDATES.length; i++) {
+                String pkg = PKG_CANDIDATES[i];
+                Object[] a = buildArgs(pt, on, rr, pkg);
+                if (a == null) { log("  该签名含未知参数类型，跳过"); break; }
+                try {
+                    m.invoke(icm, a);
+                    log(name + " 已发起 (pkg=" + pkg + ")");
+                    return true;
+                } catch (Throwable t) {
+                    log("  " + name + "(pkg=" + pkg + ") 失败: " + rootMsg(t));
+                }
             }
+            return false;
         } catch (Throwable t) {
-            log("ensureLooper 忽略: " + t);
+            log("connectivity binder 路径异常: " + rootMsg(t));
+            return false;
         }
+    }
+
+    // 按参数类型填充: int->TETHERING_WIFI, boolean->false, String->pkg, ResultReceiver->rr
+    private static Object[] buildArgs(Class<?>[] pt, boolean on, Object rr, String pkg) {
+        Object[] a = new Object[pt.length];
+        for (int i = 0; i < pt.length; i++) {
+            Class<?> c = pt[i];
+            if (c == int.class) a[i] = Integer.valueOf(TETHERING_WIFI);
+            else if (c == boolean.class) a[i] = Boolean.FALSE;
+            else if (c == String.class) a[i] = pkg;
+            else if ("android.os.ResultReceiver".equals(c.getName())) {
+                if (rr == null) return null;
+                a[i] = rr;
+            } else {
+                return null; // 未知类型
+            }
+        }
+        return a;
+    }
+
+    private static Object newResultReceiver() {
+        try {
+            Class<?> rrCls = Class.forName("android.os.ResultReceiver");
+            Class<?> handler = Class.forName("android.os.Handler");
+            Constructor<?> ctor = rrCls.getConstructor(handler);
+            return ctor.newInstance(new Object[]{ null });
+        } catch (Throwable t) {
+            log("构造 ResultReceiver 失败: " + rootMsg(t));
+            return null;
+        }
+    }
+
+    private static Object getService(String svc) {
+        try {
+            Class<?> sm = Class.forName("android.os.ServiceManager");
+            return sm.getMethod("getService", String.class).invoke(null, svc);
+        } catch (Throwable t) {
+            log("getService(" + svc + ") 失败: " + rootMsg(t));
+            return null;
+        }
+    }
+
+    private static Method findLongest(Class<?> c, String name) {
+        Method best = null;
+        Method[] ms = c.getMethods();
+        for (int i = 0; i < ms.length; i++) {
+            if (ms[i].getName().equals(name)) {
+                if (best == null || ms[i].getParameterTypes().length > best.getParameterTypes().length) {
+                    best = ms[i];
+                }
+            }
+        }
+        return best;
+    }
+
+    private static String typeNames(Class<?>[] pt) {
+        StringBuilder sb = new StringBuilder("(");
+        for (int i = 0; i < pt.length; i++) { if (i > 0) sb.append(","); sb.append(pt[i].getSimpleName()); }
+        return sb.append(")").toString();
     }
 
     private static int getSdkInt() {
-        try {
-            Class<?> b = Class.forName("android.os.Build$VERSION");
-            return b.getField("SDK_INT").getInt(null);
-        } catch (Throwable t) { return -1; }
+        try { return Class.forName("android.os.Build$VERSION").getField("SDK_INT").getInt(null); }
+        catch (Throwable t) { return -1; }
     }
 
-    private static void sleep(long ms) {
-        try { Thread.sleep(ms); } catch (InterruptedException ignored) {}
-    }
+    private static void sleep(long ms) { try { Thread.sleep(ms); } catch (InterruptedException ignored) {} }
 
-    // TetheringManager.StartTetheringCallback 是接口 -> 用 Proxy 实现
-    private static final class CbHandler implements InvocationHandler {
-        private final String tag;
-        CbHandler(String tag) { this.tag = tag; }
-        public Object invoke(Object proxy, Method method, Object[] args) {
-            log(tag + " 回调: " + method.getName()
-                    + (args != null && args.length > 0 ? (" arg=" + args[0]) : ""));
-            Class<?> rt = method.getReturnType();
-            if (rt == boolean.class) return Boolean.FALSE;
-            if (rt == int.class) return 0;
-            return null;
-        }
-    }
-
-    // ConnectivityManager.OnStartTetheringCallback 是抽象类 -> 编译期用桩子类
-    private static final class StartCb extends android.net.ConnectivityManager.OnStartTetheringCallback {
-        public void onTetheringStarted() { log("ConnectivityManager 回调: onTetheringStarted"); }
-        public void onTetheringFailed() { log("ConnectivityManager 回调: onTetheringFailed"); }
+    private static String rootMsg(Throwable t) {
+        Throwable c = t;
+        while (c.getCause() != null && c.getCause() != c) c = c.getCause();
+        return c.toString();
     }
 }

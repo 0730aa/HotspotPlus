@@ -61,8 +61,9 @@ else
   log "层1 跳过: 未找到 $DEX"
 fi
 
-# 层 2: cmd wifi start-softap（参数取 ap_mode2）
-if command -v cmd >/dev/null 2>&1; then
+# 层 2: cmd wifi start-softap（Android 11+ 才有该命令；≤10 直接跳过）
+SDK=$(getprop ro.build.version.sdk 2>/dev/null)
+if command -v cmd >/dev/null 2>&1 && [ "${SDK:-0}" -ge 30 ] 2>/dev/null; then
   AP_SSID=$("$JQ" -r '.ap_mode2.ap_ssid // "Hotspotplus"' "$CONFIG_FILE" 2>/dev/null)
   OPEN=$("$JQ" -r '.ap_mode2.open // false' "$CONFIG_FILE" 2>/dev/null)
   ENC=$("$JQ" -r '.ap_mode2.encryption // "wpa2"' "$CONFIG_FILE" 2>/dev/null)
@@ -78,7 +79,7 @@ if command -v cmd >/dev/null 2>&1; then
   if wait_ap 6; then log "层2 成功: 热点已开(ap0)"; exit 0; fi
   log "层2 未生效，进入层3"
 else
-  log "层2 跳过: 无 cmd"
+  log "层2 跳过: 无 cmd 或 Android<11(SDK=${SDK:-?})"
 fi
 
 # 层 3: uiautomator 精确点击设置里的热点开关
@@ -93,10 +94,15 @@ am start -n com.android.settings/.TetherSettings -f 0x00000400 2>/dev/null; slee
 
 DUMP="$MODDIR/log/ui_dump.xml"
 try_tap_switch() {
-  uiautomator dump "$DUMP" >/dev/null 2>&1 || return 1
-  # 找一个 class 含 Switch 的节点，取其 bounds 中心点击
-  line=$(tr '>' '>\n' < "$DUMP" | grep -iE 'class="[^"]*Switch"' | grep -iE 'checkable="true"' | head -1)
-  [ -z "$line" ] && line=$(tr '>' '>\n' < "$DUMP" | grep -iE 'class="[^"]*Switch"' | head -1)
+  # 优先 dump 到模块日志目录，失败再退到 /sdcard
+  if ! uiautomator dump "$DUMP" >/dev/null 2>&1; then
+    DUMP="/sdcard/hotspotplus_ui.xml"
+    uiautomator dump "$DUMP" >/dev/null 2>&1 || { log "  uiautomator dump 失败"; return 1; }
+  fi
+  # 匹配可勾选开关: 标准 Switch / MIUI SlidingButton / CheckBox，优先 checkable=true
+  pat='class="[^"]*(Switch|SlidingButton|CheckBox|ToggleButton)"'
+  line=$(tr '>' '>\n' < "$DUMP" | grep -iE "$pat" | grep -iE 'checkable="true"' | head -1)
+  [ -z "$line" ] && line=$(tr '>' '>\n' < "$DUMP" | grep -iE "$pat" | head -1)
   [ -z "$line" ] && return 1
   bounds=$(echo "$line" | grep -oE 'bounds="\[[0-9]+,[0-9]+\]\[[0-9]+,[0-9]+\]"' | head -1)
   [ -z "$bounds" ] && return 1

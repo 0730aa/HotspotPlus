@@ -19,10 +19,10 @@
 # 更新日志
 
 
-- **HotspotPlus_v8.0**
+- **HotspotPlus_v8.1**
 
-      1. 新增通用开热点方式 api（在 config.json 把 start_ap 设为 "api"）：通过 app_process 调用系统自身的 tethering/softap 接口开热点，与系统"个人热点"开关同源，不依赖屏幕/分辨率/语言，开的是带网络共享的真热点，热点名称密码沿用系统设置里已保存的配置
-      2. 采用分层回退：api 失败自动回退 cmd wifi（原模式二），再回退到 uiautomator 精确点击设置开关，每层都用 ap0 检测是否成功
+      1. 新增通用开热点方式 api（在 config.json 把 start_ap 设为 "api"）：通过 app_process 直接经 ServiceManager 调用系统 connectivity 服务的 startTethering，开的是与系统"个人热点"同源、带网络共享的真热点，SSID/密码沿用系统设置。不依赖屏幕/分辨率/语言，且规避了 MIUI 等 ROM 在获取 Context 阶段的崩溃（适配 Android 7~10）
+      2. 分层回退：api(binder) 失败 -> cmd wifi start-softap(仅 Android 11+) -> uiautomator 精确点击(含 MIUI SlidingButton)，每层都用 ap0 检测是否成功
       3. 目的：解决部分机型模式一/模式二都打不开热点的问题，提升机型通用性（注：安卓热点受 ROM 定制影响大，无法保证 100% 全机型，若失败请查看 log/open_hotspot.log 反馈）
 
 - **HotspotPlus_v7.9**
