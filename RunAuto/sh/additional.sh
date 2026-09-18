@@ -60,26 +60,64 @@ fi
 
 if [ -z "$hotspot_status" ]; then
   if [ "$START_AP" = "mode1" ]; then
+
+    LOG_DIR="/data/adb/modules/HotspotPlus/log"
+    LOG_FILE="$LOG_DIR/hotspot.log"
+    mkdir -p $LOG_DIR
+
+    log() {
+      echo "[$(date '+%H:%M:%S')] $1" >> "$LOG_FILE"
+    }
+
+    log "开始启动 mode1 热点"
+
     # 检查屏幕状态
     SCREEN_STATUS=$(dumpsys power | grep 'mHoldingDisplaySuspendBlocker' | awk -F= '{print $2}')
     
     if [ "$SCREEN_STATUS" = "true" ]; then
-      echo "屏幕已亮，无需唤醒"
-      # 保险起见，尝试上滑解锁
-      input swipe 300 1000 300 500
+      log "屏幕已亮，无需唤醒"
+      
+      input swipe 300 2200 300 100 300
     else
-      echo "屏幕未亮，唤醒屏幕"
-      input keyevent 26  # 唤醒屏幕
-      sleep 1 
-      input swipe 300 1000 300 500 # 上滑解锁屏幕
+      log "屏幕未亮，唤醒屏幕"
+      input keyevent 26
+      sleep 1
+      input swipe 300 2200 300 100 300
       sleep 3
     fi
-    # 进入热点设置，打开热点
-    am start -n com.android.settings/.TetherSettings
-    input keyevent 20
-    input keyevent 66
-    
-    echo "热点已打开（模式一）"
+
+    am start -n com.android.settings/.TetherSettings -f 0x00000400
+    sleep 2
+
+    success=0
+    # 尝试 4 次 TAB + ENTER
+    for i in 1 2 3 4; do
+      log "第 $i 次尝试开启热点"
+      
+      input keyevent TAB
+      sleep 0.3
+      input keyevent ENTER
+      sleep 1.3
+
+      # 检测热点
+      if ifconfig | grep -q "^ap0"; then
+        log "第 $i 次成功开启热点"
+        success=1
+        break
+      fi
+    done
+
+    if [ $success -eq 1 ]; then
+      input keyevent HOME
+      log "热点开启成功，已返回桌面"
+      echo "热点已打开（模式一）"
+    else
+      log "四次尝试均失败，热点未开启"
+      ifconfig >> "$LOG_FILE"
+      input keyevent HOME
+      echo "热点开启失败（模式一）"
+    fi
+
   fi
 else
   echo "热点已经打开"

@@ -1,5 +1,11 @@
 serverAddr = "你的服务器ip"
 serverPort = 9001
+# loginFailExit，顾名思义，就是连接服务器失败后直接退出，关闭进程。默认开启这个功能。如果关闭的话就是 连接失败后会在 dialServerTimeout秒 后再次重连，保证后台一直在，但是有可能徒增功耗
+loginFailExit = true  
+# 如果设置了密码或者加密，请在此处自行添加tokens等。此配置为无密码无加密配置文件
+[transport]
+# dialServerTimeout，跟上面 loginFailExit 功能一起，也就是与服务器连接失败之后经过多少秒再次重新连接，默认 30s，单位是 秒
+dialServerTimeout = 30
 
 [[proxies]]
 name = "telnet-android"

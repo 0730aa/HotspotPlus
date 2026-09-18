@@ -1,108 +1,100 @@
 #!/system/bin/sh
-CONFIG_FILE="/data/adb/modules/HotspotPlus/config.json"
 
-get_config_value() {
-    local key="$1"
-    local value
-    value=$(cat "$CONFIG_FILE" | /data/adb/modules/HotspotPlus/bin/jq -r "$key" 2>/dev/null)
-    if [ $? -ne 0 ]; then
-        echo "Error: Failed to get config value for key: $key" >&2
-        return 1
-    fi
-    echo "$value"
+MODULE_DIR="/data/adb/modules/HotspotPlus"
+PACKAGE="com.android.mms"
+CONFIG="$MODULE_DIR/config.json"
+LOG_FILE="$MODULE_DIR/log/sms.log"
+LF="$MODULE_DIR/log/last_sms.txt"
+PUSH_BIN="$MODULE_DIR/bin/push_arm64"
+
+mkdir -p "$MODULE_DIR/log"
+echo "=== 短信转发服务（全平台版）启动 ===" > "$LOG_FILE"
+> "$LF"
+
+get() {
+  cat "$CONFIG" | "$MODULE_DIR/bin/jq" -r "$1" 2>/dev/null
 }
 
-SMS_FORWARDING_ENABLED=$(get_config_value '.sms_forwarding_enabled')
-if [ $? -ne 0 ]; then
-    echo "Error: Failed to read SMS forwarding settings" >&2
-    exit 1
-fi
+log() {
+  echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" >> "$LOG_FILE"
+}
 
-export PREFIX=/data/user/0/bin.mt.plus/files/term
-export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$PREFIX/lib:/data/adb/modules/HotspotPlus/RunAuto/bin:/data/adb/modules/HotspotPlus/bin
-echo "LD_LIBRARY_PATH: $LD_LIBRARY_PATH"
+# 统一推送
+send_all() {
+  local title="$1"
+  local content="$2"
+  local msg="【短信转发】$title | $content"
 
-if [ "$SMS_FORWARDING_ENABLED" != "true" ]; then
-    echo "短信转发功能已禁用。"
+  log "转发短信：$title | $content"
+
+  # Webhook（企业微信/钉钉/飞书
+  if [ -n "$WEBHOOK_URL" ] && [ "$WEBHOOK_URL" != "null" ]; then
+    "$PUSH_BIN" webhook "$WEBHOOK_URL" "$msg"
+    log "Webhook 推送完成"
+  fi
+
+  # SMTP 邮件（全邮箱通用
+  if [ -n "$SMTP_HOST" ] && [ "$SMTP_HOST" != "null" ]; then
+    "$PUSH_BIN" smtp "$SMTP_HOST" "$SMTP_PORT" "$SMTP_USER" "$SMTP_PASS" "$SMTP_FROM" "$SMTP_TO" "短信通知" "$msg"
+    log "SMTP 邮件推送完成"
+  fi
+}
+
+monitor() {
+  local sms_enabled=$(get '.sms_forwarding_enabled')
+  if [ "$sms_enabled" != "true" ]; then
+    log "短信转发开关已关闭，退出监控进程"
     exit 0
+  fi
+
+  log "开始监听短信..."
+  dumpsys notification --noredact | grep -A 50 "pkg=$PACKAGE" | grep -o "key=[^ ]*" | head -3 >> "$LF"
+
+  while true; do
+    # 每次循环都重新读取开关，支持运行中动态关闭
+    local current_enabled=$(get '.sms_forwarding_enabled')
+    if [ "$current_enabled" != "true" ]; then
+      log "检测到短信转发开关已关闭，停止监控"
+      exit 0
+    fi
+
+    current=$(dumpsys notification --noredact | grep -A 50 "pkg=$PACKAGE")
+    key=$(echo "$current" | grep -o "key=[^ ]*" | head -n1)
+
+    if ! grep -qF "$key" "$LF"; then
+      echo "$key" >> "$LF"
+
+      title=$(echo "$current" | grep -A 2 "android.title" | sed -n 's/.*String.\([^"]*\).*/\1/p' | head -n1)
+      text=$(echo "$current" | grep -A 10 "android.text" | sed -n 's/.*String.\([^"]*\).*/\1/p' | head -n1)
+
+      title=${title:-未知号码}
+      text=${text:-空内容}
+
+      send_all "$title" "$text"
+    fi
+    sleep 2
+  done
+}
+
+# ----------------------
+# 初始化配置（移到日志后，避免未初始化就读取）
+# ----------------------
+SMS_ENABLED=$(get '.sms_forwarding_enabled')
+WEBHOOK_URL=$(get '.webhook.url')
+SMTP_HOST=$(get '.smtp_setting.account.host')
+SMTP_PORT=$(get '.smtp_setting.account.port')
+SMTP_USER=$(get '.smtp_setting.account.user')
+SMTP_PASS=$(get '.smtp_setting.account.password')
+SMTP_FROM=$(get '.smtp_setting.account.from')
+SMTP_TO=$(get '.smtp_setting.email_settings.to_email')
+
+# 全局开关校验：启动时直接判断，关闭则不进入监控
+if [ "$SMS_ENABLED" != "true" ]; then
+  log "短信转发总开关为关闭状态，服务不启动"
+  exit 0
 fi
 
-SMS_DB_PATH="/data/data/com.android.providers.telephony/databases/mmssms.db"
-
-# 读取配置并检查错误
-WEBHOOK_URL=$(get_config_value '.webhook.url')
-TLS=$(get_config_value '.smtp_setting.defaults.tls')
-TLS_TRUST_FILE=$(get_config_value '.smtp_setting.defaults.tls_trust_file')
-LOGFILE=$(get_config_value '.smtp_setting.defaults.logfile')
-ACCOUNT_NAME=$(get_config_value '.smtp_setting.account.name')
-SMTP_SERVER=$(get_config_value '.smtp_setting.account.host')
-SMTP_PORT=$(get_config_value '.smtp_setting.account.port')
-AUTH=$(get_config_value '.smtp_setting.account.auth')
-EMAIL=$(get_config_value '.smtp_setting.account.user')
-PASSWORD=$(get_config_value '.smtp_setting.account.password')
-FROM=$(get_config_value '.smtp_setting.account.from')
-TO_EMAIL=$(get_config_value '.smtp_setting.email_settings.to_email')
-
-# 输出配置检查
-echo "Configuration check:"
-echo "WEBHOOK_URL: $WEBHOOK_URL"
-echo "SMTP_SERVER: $SMTP_SERVER"
-echo "EMAIL: $EMAIL"
-echo "TO_EMAIL: $TO_EMAIL"
-
-send_webhook() {
-    local phone="$1"
-    local message="$2"
-    local json_data="{\"msgtype\":\"text\",\"text\":{\"content\":\"发送人号码: $phone\n短信内容: $message\"}}"
-    
-    echo "Sending webhook request to: $WEBHOOK_URL"
-    /data/user/0/bin.mt.plus/files/term/bin/curl "$WEBHOOK_URL" \
-        -H 'Content-Type: application/json' \
-        -d "$json_data"
-}
-
-send_email() {
-    local subject="$1"
-    local body="$2"
-    echo "Sending email to: $TO_EMAIL"
-    echo -e "Subject: $subject\n\n$body" | /data/adb/modules/HotspotPlus/bin/msmtp \
-        --tls=$TLS \
-        --tls-trust-file=$TLS_TRUST_FILE \
-        --logfile=$LOGFILE \
-        --host=$SMTP_SERVER \
-        --port=$SMTP_PORT \
-        --auth=$AUTH \
-        --user=$EMAIL \
-        --passwordeval="echo $PASSWORD" \
-        --from=$FROM \
-        "$TO_EMAIL"
-}
-
-get_new_sms() {
-    /data/adb/modules/HotspotPlus/bin/sqlite3 "$SMS_DB_PATH" \
-        "SELECT _id, address, body FROM sms ORDER BY _id DESC LIMIT 1;"
-}
-
-script_pid=$$
-echo $script_pid > /data/adb/modules/HotspotPlus/bin/pid_file.txt
-echo "The script PID is: $script_pid"
-
-SMS_LAST_PROCESSED_ID=0
-
-while /data/adb/modules/HotspotPlus/bin/inotifywait -e modify "$SMS_DB_PATH"; do
-    NEW_SMS=$(get_new_sms)
-    if [ -n "$NEW_SMS" ]; then
-        SMS_ID=$(echo "$NEW_SMS" | awk -F'|' '{print $1}')
-        if [ "$SMS_ID" -gt "$SMS_LAST_PROCESSED_ID" ]; then
-            ADDRESS=$(echo "$NEW_SMS" | awk -F'|' '{print $2}')
-            BODY=$(echo "$NEW_SMS" | awk -F'|' '{print $3}')
-            
-            if [ -n "$WEBHOOK_URL" ]; then
-                send_webhook "$ADDRESS" "$BODY"
-            fi
-            
-            send_email "你有一条新的短信(来自安卓热点机) $ADDRESS" "$BODY"
-            SMS_LAST_PROCESSED_ID="$SMS_ID"
-        fi
-    fi
-done
+# 信号捕获
+trap "log '服务停止'; exit" INT TERM
+# 启动监控
+monitor
