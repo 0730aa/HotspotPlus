@@ -20,7 +20,8 @@ mkdir -p "$MODDIR/log"
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" | tee -a "$LOG_FILE"; }
 : > "$LOG_FILE"
 
-ap_up() { ifconfig 2>/dev/null | grep -q "^ap0"; }
+# 通用热点接口检测（联发科 ap0 / 高通 wlan1,softap0 / 其他）
+. "$MODDIR/RunAuto/sh/lib_ap.sh"
 
 # 打开后等待 ap0 出现，最多 wait 秒
 wait_ap() {

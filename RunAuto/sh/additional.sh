@@ -10,7 +10,8 @@ START_FTP=$(/data/adb/modules/HotspotPlus/bin/jq -r '.start_ftp // false' "$CONF
 START_AP=$(/data/adb/modules/HotspotPlus/bin/jq -r '.start_ap' "$CONFIG_FILE")
 START_RNDIS=$(/data/adb/modules/HotspotPlus/bin/jq -r '.start_rndis // false' "$CONFIG_FILE")
 
-hotspot_status=$(ifconfig | grep "ap0")
+. /data/adb/modules/HotspotPlus/RunAuto/sh/lib_ap.sh
+if ap_up; then hotspot_status="up"; else hotspot_status=""; fi
 
 START_ADB=$([ "$START_ADB" = "true" ] && echo 1 || echo 0)
 START_TELNET=$([ "$START_TELNET" = "true" ] && echo 1 || echo 0)

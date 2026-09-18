@@ -20,9 +20,10 @@ fi
 
 # 可选编译期桩（本版本无需，保留兼容）
 CP=""
-if ls "$HERE"/stubs/**/*.java >/dev/null 2>&1; then
+STUBS=$(find "$HERE/stubs" -name '*.java' 2>/dev/null || true)
+if [ -n "$STUBS" ]; then
   mkdir -p "$WORK/stubcls"
-  javac -source 8 -target 8 -Xlint:-options -d "$WORK/stubcls" $(find "$HERE/stubs" -name '*.java')
+  javac -source 8 -target 8 -Xlint:-options -d "$WORK/stubcls" $STUBS
   CP="-cp $WORK/stubcls"
 fi
 

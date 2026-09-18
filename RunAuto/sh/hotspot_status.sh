@@ -9,8 +9,9 @@ START_AP=$(/data/adb/modules/HotspotPlus/bin/jq -r '.start_ap' "$CONFIG_FILE")
 AIRMODE=$(/data/adb/modules/HotspotPlus/bin/jq -r '.airmode' "$CONFIG_FILE")
 SCREEN_STATUS=$(dumpsys power | grep 'mHoldingDisplaySuspendBlocker' | awk -F= '{print $2}')
 
-# 检测热点状态
-hotspot_status=$(ifconfig | grep "ap0")
+# 检测热点状态（通用接口识别）
+. /data/adb/modules/HotspotPlus/RunAuto/sh/lib_ap.sh
+if ap_up; then hotspot_status="up"; else hotspot_status=""; fi
 
 # 如果热点关闭，开启飞行模式
 if [ -z "$hotspot_status" ]; then

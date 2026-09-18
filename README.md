@@ -19,6 +19,12 @@
 # 更新日志
 
 
+- **HotspotPlus_v8.2**
+
+      1. api 补全 Android 11+ 路径：经 ServiceManager 调 tethering 服务 ITetheringConnector.startTethering，配合原有 Android 7~10 的 connectivity 路径，覆盖 Android 7~14
+      2. 通用热点接口识别：热点网卡命名因芯片而异(联发科 ap0；高通 wlan1/softap0/swlan0；其他 uap0 等)，新增 lib_ap.sh 统一识别(已知名 + 192.168.x.1 网关兜底)，additional/hotspot_status/open_hotspot 三处共用，不再只认 ap0
+      3. 层2(cmd wifi start-softap)仅 Android 11+ 尝试，避免旧系统无谓报错
+
 - **HotspotPlus_v8.1**
 
       1. 新增通用开热点方式 api（在 config.json 把 start_ap 设为 "api"）：通过 app_process 直接经 ServiceManager 调用系统 connectivity 服务的 startTethering，开的是与系统"个人热点"同源、带网络共享的真热点，SSID/密码沿用系统设置。不依赖屏幕/分辨率/语言，且规避了 MIUI 等 ROM 在获取 Context 阶段的崩溃（适配 Android 7~10）
