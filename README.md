@@ -6,7 +6,7 @@
 
 2. 定时启动的配置文件可在模块目录下的 config.json 这个文件里面编辑,编辑完成后手动执行 cron_update.sh 立即生效，或者重启生效。
 
-3. 开机自启服务: adb 端口、ftp 服务、telnet 服务、手机热点、USB网络共享服务，这些的开关配置也在模块目录下的 config.json
+3. 开机自启服务: adb 端口、ftp 服务、telnet 服务、手机热点、USB网络共享服务，这些的开关配置也在模块目录下的 config.json（手机热点默认使用通用方式 api，start_ap 可改）
 
 4. 增加检测热点状态脚本，保持热点常开(默认关闭，配置同样在 config.json 里面)
 
@@ -18,6 +18,11 @@
 
 # 更新日志
 
+
+- **HotspotPlus_v8.3**
+
+      1. 热点默认开启方式改为 api（通用方式，config.json 的 start_ap 默认值由 mode1 改为 api）。仍可改回 mode1/mode2
+      2. 文档同步说明
 
 - **HotspotPlus_v8.2**
 
