@@ -6,15 +6,15 @@
 # 账号密码取自 config.json 的 ftp_setting，处理完再把连接交给 busybox ftpd
 
 BUSYBOX="${BUSYBOX:-/data/adb/magisk/busybox}"
-JQ="${JQ:-/data/adb/modules/HotspotPlus/bin/jq}"
-CONFIG_FILE="${CONFIG_FILE:-/data/adb/modules/HotspotPlus/config.json}"
 LOG_FILE="${LOG_FILE:-/data/adb/modules/HotspotPlus/log/ftp.log}"
+
+. "${LIB_CFG:-/data/adb/modules/HotspotPlus/RunAuto/sh/lib_cfg.sh}"
 
 FTP_DIR="$1"
 FTP_UPLOAD="$2"
 
-FTP_USER=$("$JQ" -r '.ftp_setting.user // "ftp"' "$CONFIG_FILE")
-FTP_PASS=$("$JQ" -r '.ftp_setting.password // ""' "$CONFIG_FILE")
+FTP_USER=$(cfg .ftp_setting.user ftp)
+FTP_PASS=$(cfg .ftp_setting.password)
 
 CR=$(printf '\r')
 

@@ -10,7 +10,6 @@
 # ============================================================================
 
 MODDIR="/data/adb/modules/HotspotPlus"
-JQ="$MODDIR/bin/jq"
 DEX="$MODDIR/bin/hotspotctl.dex"
 CONFIG_FILE="$MODDIR/config.json"
 LOG_FILE="$MODDIR/log/open_hotspot.log"
@@ -22,6 +21,8 @@ log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" | tee -a "$LOG_FILE"; }
 
 # 通用热点接口检测（联发科 ap0 / 高通 wlan1,softap0 / 其他）
 . "$MODDIR/RunAuto/sh/lib_ap.sh"
+# config.json 读取(cfg)
+. "$MODDIR/RunAuto/sh/lib_cfg.sh"
 
 # 打开后等待 ap0 出现，最多 wait 秒
 wait_ap() {
@@ -65,11 +66,11 @@ fi
 # 层 2: cmd wifi start-softap（Android 11+ 才有该命令；≤10 直接跳过）
 SDK=$(getprop ro.build.version.sdk 2>/dev/null)
 if command -v cmd >/dev/null 2>&1 && [ "${SDK:-0}" -ge 30 ] 2>/dev/null; then
-  AP_SSID=$("$JQ" -r '.ap_mode2.ap_ssid // "Hotspotplus"' "$CONFIG_FILE" 2>/dev/null)
-  OPEN=$("$JQ" -r '.ap_mode2.open // false' "$CONFIG_FILE" 2>/dev/null)
-  ENC=$("$JQ" -r '.ap_mode2.encryption // "wpa2"' "$CONFIG_FILE" 2>/dev/null)
-  PWD_=$("$JQ" -r '.ap_mode2.password // "88888888"' "$CONFIG_FILE" 2>/dev/null)
-  BAND=$("$JQ" -r '.ap_mode2.band // 2' "$CONFIG_FILE" 2>/dev/null)
+  AP_SSID=$(cfg .ap_mode2.ap_ssid Hotspotplus)
+  OPEN=$(cfg .ap_mode2.open false)
+  ENC=$(cfg .ap_mode2.encryption wpa2)
+  PWD_=$(cfg .ap_mode2.password 88888888)
+  BAND=$(cfg .ap_mode2.band 2)
   if [ "$OPEN" = "true" ]; then
     CMD="cmd wifi start-softap $AP_SSID open -b$BAND"
   else

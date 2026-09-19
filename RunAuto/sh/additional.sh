@@ -1,18 +1,18 @@
 #!/system/bin/sh
 
-CONFIG_FILE="/data/adb/modules/HotspotPlus/config.json"
+. /data/adb/modules/HotspotPlus/RunAuto/sh/lib_cfg.sh
 
 # 获取配置文件的值
-START_ADB=$(/data/adb/modules/HotspotPlus/bin/jq -r '.start_adb // false' "$CONFIG_FILE")
-ADB_PORT=$(/data/adb/modules/HotspotPlus/bin/jq -r '.adb_port' "$CONFIG_FILE")
-START_TELNET=$(/data/adb/modules/HotspotPlus/bin/jq -r '.start_telnet // false' "$CONFIG_FILE")
-START_FTP=$(/data/adb/modules/HotspotPlus/bin/jq -r '.start_ftp // false' "$CONFIG_FILE")
-FTP_PORT=$(/data/adb/modules/HotspotPlus/bin/jq -r '.ftp_setting.port // 21' "$CONFIG_FILE")
-FTP_DIR=$(/data/adb/modules/HotspotPlus/bin/jq -r '.ftp_setting.dir // "/sdcard"' "$CONFIG_FILE")
-FTP_UPLOAD=$(/data/adb/modules/HotspotPlus/bin/jq -r 'if .ftp_setting.allow_upload == false then "false" else "true" end' "$CONFIG_FILE")
-FTP_PASS=$(/data/adb/modules/HotspotPlus/bin/jq -r '.ftp_setting.password // ""' "$CONFIG_FILE")
-START_AP=$(/data/adb/modules/HotspotPlus/bin/jq -r '.start_ap' "$CONFIG_FILE")
-START_RNDIS=$(/data/adb/modules/HotspotPlus/bin/jq -r '.start_rndis // false' "$CONFIG_FILE")
+START_ADB=$(cfg .start_adb false)
+ADB_PORT=$(cfg .adb_port 5555)
+START_TELNET=$(cfg .start_telnet false)
+START_FTP=$(cfg .start_ftp false)
+FTP_PORT=$(cfg .ftp_setting.port 21)
+FTP_DIR=$(cfg .ftp_setting.dir /sdcard)
+FTP_UPLOAD=$(cfg .ftp_setting.allow_upload true)
+FTP_PASS=$(cfg .ftp_setting.password)
+START_AP=$(cfg .start_ap false)
+START_RNDIS=$(cfg .start_rndis false)
 
 . /data/adb/modules/HotspotPlus/RunAuto/sh/lib_ap.sh
 if ap_up; then hotspot_status="up"; else hotspot_status=""; fi
@@ -74,11 +74,11 @@ else
 fi
 
 if [ "$START_AP" = "mode2" ]; then
-  AP_SSID=$(/data/adb/modules/HotspotPlus/bin/jq -r '.ap_mode2.ap_ssid' "$CONFIG_FILE")
-  OPEN=$(/data/adb/modules/HotspotPlus/bin/jq -r '.ap_mode2.open' "$CONFIG_FILE")
-  ENCRYPTION=$(/data/adb/modules/HotspotPlus/bin/jq -r '.ap_mode2.encryption' "$CONFIG_FILE")
-  PASSWORD=$(/data/adb/modules/HotspotPlus/bin/jq -r '.ap_mode2.password' "$CONFIG_FILE")
-  BAND=$(/data/adb/modules/HotspotPlus/bin/jq -r '.ap_mode2.band' "$CONFIG_FILE")
+  AP_SSID=$(cfg .ap_mode2.ap_ssid Hotspotplus)
+  OPEN=$(cfg .ap_mode2.open false)
+  ENCRYPTION=$(cfg .ap_mode2.encryption wpa2)
+  PASSWORD=$(cfg .ap_mode2.password)
+  BAND=$(cfg .ap_mode2.band 2)
 
   if [ "$OPEN" = "true" ]; then
     CMD="cmd wifi start-softap $AP_SSID open -b$BAND"

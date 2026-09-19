@@ -11,9 +11,7 @@ mkdir -p "$MODULE_DIR/log"
 echo "=== 短信转发服务（全平台版）启动 ===" > "$LOG_FILE"
 > "$LF"
 
-get() {
-  cat "$CONFIG" | "$MODULE_DIR/bin/jq" -r "$1" 2>/dev/null
-}
+. "$MODULE_DIR/RunAuto/sh/lib_cfg.sh"
 
 log() {
   echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" >> "$LOG_FILE"
@@ -41,7 +39,7 @@ send_all() {
 }
 
 monitor() {
-  local sms_enabled=$(get '.sms_forwarding_enabled')
+  local sms_enabled=$(cfg .sms_forwarding_enabled false)
   if [ "$sms_enabled" != "true" ]; then
     log "短信转发开关已关闭，退出监控进程"
     exit 0
@@ -52,7 +50,7 @@ monitor() {
 
   while true; do
     # 每次循环都重新读取开关，支持运行中动态关闭
-    local current_enabled=$(get '.sms_forwarding_enabled')
+    local current_enabled=$(cfg .sms_forwarding_enabled false)
     if [ "$current_enabled" != "true" ]; then
       log "检测到短信转发开关已关闭，停止监控"
       exit 0
@@ -79,14 +77,14 @@ monitor() {
 # ----------------------
 # 初始化配置（移到日志后，避免未初始化就读取）
 # ----------------------
-SMS_ENABLED=$(get '.sms_forwarding_enabled')
-WEBHOOK_URL=$(get '.webhook.url')
-SMTP_HOST=$(get '.smtp_setting.account.host')
-SMTP_PORT=$(get '.smtp_setting.account.port')
-SMTP_USER=$(get '.smtp_setting.account.user')
-SMTP_PASS=$(get '.smtp_setting.account.password')
-SMTP_FROM=$(get '.smtp_setting.account.from')
-SMTP_TO=$(get '.smtp_setting.email_settings.to_email')
+SMS_ENABLED=$(cfg .sms_forwarding_enabled false)
+WEBHOOK_URL=$(cfg .webhook.url)
+SMTP_HOST=$(cfg .smtp_setting.account.host)
+SMTP_PORT=$(cfg .smtp_setting.account.port 587)
+SMTP_USER=$(cfg .smtp_setting.account.user)
+SMTP_PASS=$(cfg .smtp_setting.account.password)
+SMTP_FROM=$(cfg .smtp_setting.account.from)
+SMTP_TO=$(cfg .smtp_setting.email_settings.to_email)
 
 # 全局开关校验：启动时直接判断，关闭则不进入监控
 if [ "$SMS_ENABLED" != "true" ]; then

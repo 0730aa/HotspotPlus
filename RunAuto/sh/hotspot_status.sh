@@ -1,12 +1,12 @@
 #!/system/bin/sh
 
-CONFIG_FILE="/data/adb/modules/HotspotPlus/config.json"
 LOG_FILE="/data/adb/modules/HotspotPlus/log/hotspot_status.log"
 CURRENT_TIME=$(date "+%Y-%m-%d %H:%M:%S")
 
 # 读取配置
-START_AP=$(/data/adb/modules/HotspotPlus/bin/jq -r '.start_ap' "$CONFIG_FILE")
-AIRMODE=$(/data/adb/modules/HotspotPlus/bin/jq -r '.airmode' "$CONFIG_FILE")
+. /data/adb/modules/HotspotPlus/RunAuto/sh/lib_cfg.sh
+START_AP=$(cfg .start_ap false)
+AIRMODE=$(cfg .airmode false)
 SCREEN_STATUS=$(dumpsys power | grep 'mHoldingDisplaySuspendBlocker' | awk -F= '{print $2}')
 
 # 检测热点状态（通用接口识别）
@@ -35,11 +35,11 @@ if [ -z "$hotspot_status" ]; then
     echo "$CURRENT_TIME - 通用模式(api)重新打开热点" | tee -a "$LOG_FILE"
     /data/adb/modules/HotspotPlus/RunAuto/sh/open_hotspot.sh on
   elif [ "$START_AP" = "mode2" ]; then
-    AP_SSID=$(/data/adb/modules/HotspotPlus/bin/jq -r '.ap_mode2.ap_ssid' "$CONFIG_FILE")
-    OPEN=$(/data/adb/modules/HotspotPlus/bin/jq -r '.ap_mode2.open' "$CONFIG_FILE")
-    ENCRYPTION=$(/data/adb/modules/HotspotPlus/bin/jq -r '.ap_mode2.encryption' "$CONFIG_FILE")
-    PASSWORD=$(/data/adb/modules/HotspotPlus/bin/jq -r '.ap_mode2.password' "$CONFIG_FILE")
-    BAND=$(/data/adb/modules/HotspotPlus/bin/jq -r '.ap_mode2.band' "$CONFIG_FILE")
+    AP_SSID=$(cfg .ap_mode2.ap_ssid Hotspotplus)
+    OPEN=$(cfg .ap_mode2.open false)
+    ENCRYPTION=$(cfg .ap_mode2.encryption wpa2)
+    PASSWORD=$(cfg .ap_mode2.password)
+    BAND=$(cfg .ap_mode2.band 2)
     
     if [ "$OPEN" = "true" ]; then
       CMD="cmd wifi start-softap $AP_SSID open -b$BAND"

@@ -1,6 +1,9 @@
 # 使用说明
 
 0. 所有功能的开启与关闭均可在模块目录下的 config.json 里面设置开关
+     - 升级(覆盖刷入)时会问你要不要保留原来的配置: 音量上键保留、音量下键改用新版默认配置、10 秒不按键默认保留。保留的文件为 config.json 和 frp/frpc.toml
+     - 选了用新版默认配置时，旧配置会先备份到 /data/adb/HotspotPlus_backup/ 下，不会丢
+     - 保留旧配置时，新版自带的那份会存成 config.json.new，可以对照看这次新增了哪些选项(没写的选项会自动用默认值，不影响使用)
 
 1. 本模块已经配置 frpc 相关服务，请在刷入前自行修改 frp/frpc.toml 里面的服务器IP地址和端口（如果服务器端设置了密码或者加密配置，请自行添加相关配置。默认配置为无密码无加密!!!）
 
@@ -28,6 +31,8 @@
       3. ftp 新增自定义端口号(ftp_setting.port)和只读共享开关(ftp_setting.allow_upload)
       4. ftp 修复中文文件名变成乱码 0 字节垃圾文件的问题: busybox ftpd 不宣告 UTF8，客户端会退回自己系统的编码(中文 Windows 为 GBK)发文件名，这些字节在只认 UTF-8 的安卓 /sdcard 上就成了乱码。现在由 ftp_login.sh 统一宣告 UTF8 并接受 OPTS UTF8 ON
       5. ftp 共享目录填错(目录不存在)时不再启动服务，并在 service.log 里给出提示
+      6. 刷入时可以选择保留原有配置(config.json 和 frp/frpc.toml)，不用每次升级都重新填一遍
+      7. 新增 lib_cfg.sh 统一读取配置，各脚本里的 jq 调用统一成 cfg .ftp_setting.port 21 这种短写法; 顺带修掉了配置里缺某个键时会取到 null 的问题(现在会回落到默认值)
 
 - **HotspotPlus_v8.3**
 
