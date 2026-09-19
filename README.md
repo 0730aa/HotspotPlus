@@ -7,6 +7,8 @@
 2. 定时启动的配置文件可在模块目录下的 config.json 这个文件里面编辑,编辑完成后手动执行 cron_update.sh 立即生效，或者重启生效。
 
 3. 开机自启服务: adb 端口、ftp 服务、telnet 服务、手机热点、USB网络共享服务，这些的开关配置也在模块目录下的 config.json
+     - ftp 的共享目录、端口、是否允许上传、账号密码都在 config.json 的 ftp_setting 里设置。默认只共享 /sdcard(手机内部存储)，如果确实需要共享整个系统再把 dir 改成 "/"
+     - ftp 的 password 留空就是免登录(和以前一样)，填了密码就要用 user + password 登录
 
 4. 增加检测热点状态脚本，保持热点常开(默认关闭，配置同样在 config.json 里面)
 
@@ -18,6 +20,13 @@
 
 # 更新日志
 
+
+- **HotspotPlus_v8.0**
+
+      1. ftp 共享目录可以自己指定(config.json 里的 ftp_setting.dir)，默认由根目录 / 改为 /sdcard，避免整个系统被局域网里的设备读写
+      2. ftp 新增账号密码登录(ftp_setting.user / ftp_setting.password)，password 留空则和以前一样免登录
+      3. ftp 新增自定义端口号(ftp_setting.port)和只读共享开关(ftp_setting.allow_upload)
+      4. ftp 共享目录填错(目录不存在)时不再启动服务，并在 service.log 里给出提示
 
 - **HotspotPlus_v7.9**
 

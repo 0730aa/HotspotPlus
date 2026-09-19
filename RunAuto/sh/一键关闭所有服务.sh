@@ -11,6 +11,8 @@ kill -9 $(/data/adb/magisk/busybox ps | grep '[t]elnetd' | awk '{print $1}')
 sleep 1
 kill -9 $(/data/adb/magisk/busybox ps | grep '[t]cpsvd' | awk '{print $1}')
 sleep 1
+kill -9 $(/data/adb/magisk/busybox ps | grep -E '[f]tpd|[f]tp_login' | awk '{print $1}')
+sleep 1
 pkill -9 -x inotifywait
 sleep 1
 stop adbd

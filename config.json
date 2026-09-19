@@ -5,6 +5,13 @@
   "start_telnet": false, 
   
   "start_ftp": false,
+  "ftp_setting": {
+      "port": 21,
+      "dir": "/sdcard",
+      "allow_upload": true,
+      "user": "hotspot",
+      "password": ""
+    },
   
    "start_ap": "mode1",     
    "ap_mode2": {
