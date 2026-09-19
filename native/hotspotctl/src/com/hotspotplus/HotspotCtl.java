@@ -11,7 +11,7 @@ import java.lang.reflect.Method;
  *   Android 11+ (API 30+): tethering 服务 ITetheringConnector.startTethering(TetheringRequestParcel,...)
  *   Android 7~10 (API 24~29): connectivity 服务 IConnectivityManager.startTethering(...)
  *
- * 用法: CLASSPATH=hotspotctl.dex app_process /system/bin com.hotspotplus.HotspotCtl on|off
+ * 用法: CLASSPATH=hotspotctl.dex app_process /system/bin com.hotspotplus.HotspotCtl on|off|noautooff
  * 是否真的成功由外层脚本用接口检测(ap_up)判定。
  */
 public final class HotspotCtl {
@@ -25,6 +25,15 @@ public final class HotspotCtl {
         String action = (args != null && args.length > 0) ? args[0] : "on";
         int sdk = getSdkInt();
         log("start action=" + action + " sdk=" + sdk);
+
+        // 关掉"热点空闲无设备连接自动关闭"，不开关热点
+        if ("noautooff".equalsIgnoreCase(action)) {
+            boolean done = disableApAutoShutdown();
+            log("noautooff done=" + done);
+            sleep(300);
+            System.exit(done ? 0 : 1);
+        }
+
         boolean on = !"off".equalsIgnoreCase(action);
 
         boolean ok = false;
@@ -177,6 +186,102 @@ public final class HotspotCtl {
         }
     }
 
+    // ============== 关闭"热点空闲自动关闭" (Android 11+ 的正确做法) ==============
+    // 安卓 11 起这个开关已经从 Settings.Global.soft_ap_timeout_enabled 挪进了
+    // SoftApConfiguration，再写 settings 不会有任何效果(系统设置里的开关也纹丝不动)，
+    // 必须 getSoftApConfiguration -> Builder.setAutoShutdownEnabled(false) -> setSoftApConfiguration
+    private static boolean disableApAutoShutdown() {
+        try {
+            Object binder = getService("wifi");
+            if (binder == null) { log("wifi 服务 binder=null"); return false; }
+            Class<?> ibinder = Class.forName("android.os.IBinder");
+            Class<?> stub = Class.forName("android.net.wifi.IWifiManager$Stub");
+            Object wifi = stub.getMethod("asInterface", ibinder).invoke(null, binder);
+            Class<?> wifiCls = Class.forName("android.net.wifi.IWifiManager");
+
+            Object cfg = getSoftApConfig(wifi, wifiCls);
+            if (cfg == null) { log("拿不到 SoftApConfiguration(可能是 Android 10 及以下)"); return false; }
+            log("当前 autoShutdownEnabled=" + readAutoShutdown(cfg));
+
+            Class<?> sacCls = Class.forName("android.net.wifi.SoftApConfiguration");
+            Class<?> bCls = Class.forName("android.net.wifi.SoftApConfiguration$Builder");
+            Object b = bCls.getConstructor(sacCls).newInstance(cfg);
+            Method setAuto;
+            try {
+                setAuto = bCls.getMethod("setAutoShutdownEnabled", boolean.class);
+            } catch (Throwable t) {
+                log("SoftApConfiguration.Builder 没有 setAutoShutdownEnabled: " + rootMsg(t));
+                return false;
+            }
+            setAuto.invoke(b, Boolean.FALSE);
+            Object ncfg = bCls.getMethod("build").invoke(b);
+
+            Method set = findLongest(wifiCls, "setSoftApConfiguration");
+            if (set == null) { log("IWifiManager 没有 setSoftApConfiguration"); return false; }
+            Class<?>[] pt = set.getParameterTypes();
+            log("IWifiManager.setSoftApConfiguration 签名 " + typeNames(pt));
+
+            for (int i = 0; i < PKG_CANDIDATES.length; i++) {
+                Object[] a = new Object[pt.length];
+                boolean known = true;
+                for (int j = 0; j < pt.length; j++) {
+                    if (pt[j].isAssignableFrom(sacCls)) a[j] = ncfg;
+                    else if (pt[j] == String.class) a[j] = PKG_CANDIDATES[i];
+                    else if (pt[j] == boolean.class) a[j] = Boolean.FALSE;
+                    else if (pt[j] == int.class) a[j] = Integer.valueOf(0);
+                    else { known = false; break; }
+                }
+                if (!known) { log("  setSoftApConfiguration 含未知参数类型，放弃"); return false; }
+                try {
+                    Object r = set.invoke(wifi, a);
+                    log("  setSoftApConfiguration(pkg=" + PKG_CANDIDATES[i] + ") 返回 " + r);
+                    if (r instanceof Boolean && !((Boolean) r).booleanValue()) continue;
+                    // 回读确认，真正生效才算成功
+                    Object back = getSoftApConfig(wifi, wifiCls);
+                    Boolean now = (back == null) ? null : readAutoShutdown(back);
+                    log("  回读 autoShutdownEnabled=" + now);
+                    if (now != null && !now.booleanValue()) return true;
+                } catch (Throwable t) {
+                    log("  setSoftApConfiguration(pkg=" + PKG_CANDIDATES[i] + ") 失败: " + rootMsg(t));
+                }
+            }
+            return false;
+        } catch (Throwable t) {
+            log("关闭热点自动关闭异常: " + rootMsg(t));
+            return false;
+        }
+    }
+
+    private static Object getSoftApConfig(Object wifi, Class<?> wifiCls) {
+        Method get = findShortest(wifiCls, "getSoftApConfiguration");
+        if (get == null) return null;
+        Class<?>[] pt = get.getParameterTypes();
+        for (int i = 0; i < PKG_CANDIDATES.length; i++) {
+            Object[] a = new Object[pt.length];
+            boolean known = true;
+            for (int j = 0; j < pt.length; j++) {
+                if (pt[j] == String.class) a[j] = PKG_CANDIDATES[i];
+                else if (pt[j] == boolean.class) a[j] = Boolean.FALSE;
+                else if (pt[j] == int.class) a[j] = Integer.valueOf(0);
+                else { known = false; break; }
+            }
+            if (!known) return null;
+            try {
+                Object c = get.invoke(wifi, a);
+                if (c != null) return c;
+            } catch (Throwable t) {
+                log("  getSoftApConfiguration(pkg=" + PKG_CANDIDATES[i] + ") 失败: " + rootMsg(t));
+            }
+        }
+        return null;
+    }
+
+    private static Boolean readAutoShutdown(Object cfg) {
+        try {
+            return (Boolean) cfg.getClass().getMethod("isAutoShutdownEnabled").invoke(cfg);
+        } catch (Throwable t) { return null; }
+    }
+
     // ========================= 反射/工具 =========================
     private static Object getService(String svc) {
         try {
@@ -198,6 +303,17 @@ public final class HotspotCtl {
         for (int i = 0; i < ms.length; i++) {
             if (ms[i].getName().equals(name)) {
                 if (best == null || ms[i].getParameterTypes().length > best.getParameterTypes().length) best = ms[i];
+            }
+        }
+        return best;
+    }
+
+    private static Method findShortest(Class<?> c, String name) {
+        Method best = null;
+        Method[] ms = c.getMethods();
+        for (int i = 0; i < ms.length; i++) {
+            if (ms[i].getName().equals(name)) {
+                if (best == null || ms[i].getParameterTypes().length < best.getParameterTypes().length) best = ms[i];
             }
         }
         return best;

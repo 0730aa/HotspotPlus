@@ -28,6 +28,16 @@
 # 更新日志
 
 
+- **HotspotPlus_v8.5**
+
+      1. 修复 ap_keep_alive 不生效(热点没人连还是会自动关闭，系统设置里的"自动关闭热点"开关也纹丝不动)。
+         原因是安卓 11 起这个开关已经从 Settings.Global.soft_ap_timeout_enabled 挪进了 SoftApConfiguration，
+         再写 settings 没有任何效果。现在改为经 hotspotctl.dex 调 IWifiManager:
+         getSoftApConfiguration -> Builder.setAutoShutdownEnabled(false) -> setSoftApConfiguration，
+         并回读确认是否真的改成功(结果记在 log/open_hotspot.log)。安卓 10 及以下仍走原来的 Settings.Global
+      2. 修复热点已经开着时不会去改这个配置的问题(上一版把它放在了"热点已开就退出"之后)
+      3. 注意: 改的是热点配置，对"下一次开启热点"生效。如果热点当前正开着，需要它重开一次(或手动关一次再开)才会真正不再自动关闭
+
 - **HotspotPlus_v8.4**
 
       1. ftp 共享目录可以自己指定(config.json 里的 ftp_setting.dir)，默认由根目录 / 改为 /sdcard，避免整个系统被局域网里的设备读写

@@ -40,12 +40,6 @@ case "$WHAT" in
 
     log "热点已关闭，准备重新打开"
 
-    # 先把系统的"空闲自动关闭热点"关掉，否则刚开起来过一会儿又被系统关了
-    if [ "$(cfg .ap_keep_alive true)" = "true" ]; then
-      ap_no_timeout
-      log "已关闭系统的热点空闲自动关闭"
-    fi
-
     if [ "$(cfg .airmode false)" = "true" ]; then
       log "先切一次飞行模式"
       settings put global airplane_mode_on 1

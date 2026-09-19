@@ -74,13 +74,14 @@ fi
 
 # 热点总开关关掉时，本模块不碰热点(也不切飞行模式)
 case "$START_AP" in
-  api|mode1|mode2)
-    # 关掉系统"无设备连接就自动关闭热点"的超时，否则开起来过一会儿又被系统关了
+  mode1|mode2)
+    # 关掉系统"无设备连接就自动关闭热点"(api 方式由 open_hotspot.sh 内部处理)
     if [ "$(cfg .ap_keep_alive true)" = "true" ]; then
-      ap_no_timeout
+      ap_no_timeout >/dev/null 2>&1
       echo "已关闭系统的热点空闲自动关闭"
     fi
     ;;
+  api) ;;
   *)
     echo "热点功能已关闭(start_ap=$START_AP)，本模块不会去开热点"
     ;;

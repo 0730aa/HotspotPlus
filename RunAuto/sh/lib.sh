@@ -61,13 +61,27 @@ ap_up() {
 
 # ---------------------------------------------------------------------------
 # 关掉系统的"热点空闲自动关闭"
-# 安卓自带一个策略: 热点开着但一段时间(通常 5/10 分钟)没有设备连接就自动关闭。
-# 这就是"热点没人连就自己关了，热点检测也救不回来"的根源——检测脚本刚把它打开，
-# 系统又把它关掉。soft_ap_timeout_enabled 置 0 即可关掉这个超时。
-# (安卓 11+ 该值已迁移到 SoftApConfiguration，能不能生效取决于 ROM，所以两边都试)
+# 安卓自带一个策略: 热点开着但一段时间(通常 5/10 分钟)没有设备连接就自动关闭，
+# 这就是"热点没人连就自己关了，热点检测也救不回来"的根源。
+#
+# 安卓 10 及以下: 该开关存在 Settings.Global.soft_ap_timeout_enabled
+# 安卓 11 及以上: 已经挪进 SoftApConfiguration.isAutoShutdownEnabled，
+#                 再写 settings 没有任何效果(系统设置里的开关也不会变)，
+#                 必须走 hotspotctl.dex 改 SoftAp 配置
+#
+# 注意: 改的是热点配置，对"下一次开启热点"生效。如果热点当前正开着，
+#       要等它重开一次(或手动关一次再开)才会真正不再自动关闭。
 # ---------------------------------------------------------------------------
 ap_no_timeout() {
+  _sdk=$(getprop ro.build.version.sdk 2>/dev/null)
+  _dex="/data/adb/modules/HotspotPlus/bin/hotspotctl.dex"
+
+  if [ "${_sdk:-0}" -ge 30 ] 2>/dev/null && [ -f "$_dex" ]; then
+    CLASSPATH="$_dex" app_process /system/bin com.hotspotplus.HotspotCtl noautooff 2>&1
+    return $?
+  fi
+
+  # 安卓 10 及以下走老设置项
   settings put global soft_ap_timeout_enabled 0 2>/dev/null
-  cmd wifi set-soft-ap-auto-shutdown disabled 2>/dev/null
   return 0
 }

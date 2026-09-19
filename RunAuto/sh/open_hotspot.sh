@@ -46,15 +46,17 @@ if [ "$ACTION" = "off" ]; then
 fi
 
 # ---------------- on ----------------
-if ap_up; then
-  log "热点已开启(ap0 存在)，无需操作"
-  exit 0
+# 先关掉系统的"空闲无设备连接自动关闭热点"。
+# 放在"热点已开就退出"之前，是因为热点已经开着时同样需要改掉这个配置，
+# 否则它还是会在没人连的时候把热点关掉
+if [ "$(cfg .ap_keep_alive true)" = "true" ]; then
+  log "关闭系统的热点空闲自动关闭:"
+  ap_no_timeout 2>&1 | while read -r l; do log "  $l"; done
 fi
 
-# 开之前先关掉系统的"空闲自动关闭热点"，否则开起来没人连，过一会儿又被系统关掉
-if [ "$(cfg .ap_keep_alive true)" = "true" ]; then
-  ap_no_timeout
-  log "已关闭系统的热点空闲自动关闭(soft_ap_timeout_enabled=0)"
+if ap_up; then
+  log "热点已开启，无需操作"
+  exit 0
 fi
 
 # 层 1: dex + app_process 调系统 API
