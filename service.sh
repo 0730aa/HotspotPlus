@@ -23,7 +23,6 @@ pkill -9 -x busybox crond
 log_to_file "终止 crond 进程"
 
 chmod -R 777 /data/adb/modules/HotspotPlus
-chmod -R 777 /data/data/com.android.providers.telephony
 log_to_file "获取满权限到子文件夹"
 
 sleep 4
