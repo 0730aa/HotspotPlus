@@ -26,7 +26,8 @@
       1. ftp 共享目录可以自己指定(config.json 里的 ftp_setting.dir)，默认由根目录 / 改为 /sdcard，避免整个系统被局域网里的设备读写
       2. ftp 新增账号密码登录(ftp_setting.user / ftp_setting.password)，password 留空则和以前一样免登录
       3. ftp 新增自定义端口号(ftp_setting.port)和只读共享开关(ftp_setting.allow_upload)
-      4. ftp 共享目录填错(目录不存在)时不再启动服务，并在 service.log 里给出提示
+      4. ftp 修复中文文件名变成乱码 0 字节垃圾文件的问题: busybox ftpd 不宣告 UTF8，客户端会退回自己系统的编码(中文 Windows 为 GBK)发文件名，这些字节在只认 UTF-8 的安卓 /sdcard 上就成了乱码。现在由 ftp_login.sh 统一宣告 UTF8 并接受 OPTS UTF8 ON
+      5. ftp 共享目录填错(目录不存在)时不再启动服务，并在 service.log 里给出提示
 
 - **HotspotPlus_v8.3**
 

@@ -58,18 +58,16 @@ if [ $START_FTP -eq 1 ]; then
       FTP_MODE="只读"
     fi
 
-    # ftpd 的 -A 是免登录，共享目录会被 chroot 成 FTP 的根目录，出不去
     if [ -n "$FTP_PASS" ]; then
-      # 配置了密码: 先由 ftp_login.sh 校验账号密码，通过后再把连接交给 ftpd
-      /data/adb/magisk/busybox tcpsvd -vE 0.0.0.0 "$FTP_PORT" /data/adb/modules/HotspotPlus/RunAuto/sh/ftp_login.sh "$FTP_DIR" "$FTP_UPLOAD" >/dev/null 2>&1 &
-      echo "FTP 已开启，端口号: $FTP_PORT，共享目录: $FTP_DIR，$FTP_MODE，需账号密码登录"
-    elif [ "$FTP_UPLOAD" = "true" ]; then
-      /data/adb/magisk/busybox tcpsvd -vE 0.0.0.0 "$FTP_PORT" /data/adb/magisk/busybox ftpd -w -A "$FTP_DIR" >/dev/null 2>&1 &
-      echo "FTP 已开启，端口号: $FTP_PORT，共享目录: $FTP_DIR，$FTP_MODE，免登录"
+      FTP_AUTH="需账号密码登录"
     else
-      /data/adb/magisk/busybox tcpsvd -vE 0.0.0.0 "$FTP_PORT" /data/adb/magisk/busybox ftpd -A "$FTP_DIR" >/dev/null 2>&1 &
-      echo "FTP 已开启，端口号: $FTP_PORT，共享目录: $FTP_DIR，$FTP_MODE，免登录"
+      FTP_AUTH="免登录"
     fi
+
+    # 连接先交给 ftp_login.sh 处理 UTF-8 协商和账号密码，再转给 ftpd。
+    # ftpd 的 -A 是免登录(校验已经在前面做完)，共享目录会被 chroot 成 FTP 的根目录，出不去
+    /data/adb/magisk/busybox tcpsvd -vE 0.0.0.0 "$FTP_PORT" /data/adb/modules/HotspotPlus/RunAuto/sh/ftp_login.sh "$FTP_DIR" "$FTP_UPLOAD" >/dev/null 2>&1 &
+    echo "FTP 已开启，端口号: $FTP_PORT，共享目录: $FTP_DIR，$FTP_MODE，$FTP_AUTH"
   fi
 else
   echo "FTP 未开启"

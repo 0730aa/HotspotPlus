@@ -1,9 +1,9 @@
 #!/system/bin/sh
 
-# FTP 账号密码校验
+# FTP 连接前置处理: UTF-8 协商 + 账号密码校验
 # tcpsvd 每接到一个连接就单独跑一次这个脚本，脚本的标准输入/输出就是这个连接
 # 用法: ftp_login.sh <共享目录> <是否允许上传 true/false>
-# 账号密码取自 config.json 的 ftp_setting，校验通过后把连接交给 busybox ftpd
+# 账号密码取自 config.json 的 ftp_setting，处理完再把连接交给 busybox ftpd
 
 BUSYBOX="${BUSYBOX:-/data/adb/magisk/busybox}"
 JQ="${JQ:-/data/adb/modules/HotspotPlus/bin/jq}"
@@ -27,10 +27,29 @@ log() {
   echo "$(date '+%Y-%m-%d %H:%M:%S') - $1" >> "$LOG_FILE" 2>/dev/null
 }
 
+upper() {
+  echo "$1" | tr 'a-z' 'A-Z'
+}
+
+# busybox ftpd 的 FEAT 里没有 UTF8，客户端会以为服务端不支持，
+# 于是退回自己系统的编码(中文 Windows 是 GBK)发文件名。
+# 这些字节到了只认 UTF-8 的安卓 /sdcard 就成了乱码的 0 字节垃圾文件。
+# 所以这里自己答一份带 UTF8 的 FEAT，并接受 OPTS UTF8 ON
+feat() {
+  printf '211-Features:\r\n UTF8\r\n EPSV\r\n PASV\r\n REST STREAM\r\n MDTM\r\n SIZE\r\n211 End\r\n'
+}
+
 send "220 HotspotPlus FTP"
 
-user_ok=0
+# 没设密码就是免登录(和以前一样)，任何账号密码都放行
+if [ -n "$FTP_PASS" ]; then
+  need_auth=1
+else
+  need_auth=0
+fi
+
 pass_ok=0
+user_ok=0
 tries=0
 
 while [ $tries -lt 3 ]; do
@@ -40,15 +59,28 @@ while [ $tries -lt 3 ]; do
   cmd=${line%% *}
   arg=""
   case "$line" in *" "*) arg=${line#* } ;; esac
-  cmd=$(echo "$cmd" | tr 'a-z' 'A-Z')
+  cmd=$(upper "$cmd")
 
   case "$cmd" in
+    FEAT)
+      feat
+      ;;
+    OPTS)
+      case "$(upper "$arg")" in
+        "UTF8 ON"|"UTF-8 ON"|UTF8|UTF-8) send "200 UTF8 mode enabled" ;;
+        *) send "501 Option not supported" ;;
+      esac
+      ;;
     USER)
-      [ "$arg" = "$FTP_USER" ] && user_ok=1 || user_ok=0
+      if [ $need_auth -eq 0 ] || [ "$arg" = "$FTP_USER" ]; then
+        user_ok=1
+      else
+        user_ok=0
+      fi
       send "331 Please specify the password"
       ;;
     PASS)
-      if [ $user_ok -eq 1 ] && [ "$arg" = "$FTP_PASS" ]; then
+      if [ $user_ok -eq 1 ] && { [ $need_auth -eq 0 ] || [ "$arg" = "$FTP_PASS" ]; }; then
         pass_ok=1
         break
       fi
@@ -76,12 +108,16 @@ fi
 
 send "230 Login successful"
 
-# 校验通过，把连接交给 busybox ftpd。
-# ftpd 启动时自己还会再发一行 220 欢迎信息，这里用 read 把这一行吃掉，
-# 否则它会和上面的 230 挤在一起，客户端后面收到的响应就全错位了
+# 交给 busybox ftpd。出口再过一道 awk:
+#   1) 吃掉 ftpd 自己那行 220 欢迎信息，否则会和上面的 230 挤在一起，客户端响应全错位
+#   2) 给 ftpd 的 FEAT 响应补上 UTF8(有些客户端是登录之后才问 FEAT 的)
+# fflush 保证逐行立即送出，不会因为缓冲把协议卡住
 exec 3>&1
 if [ "$FTP_UPLOAD" = "true" ]; then
   "$BUSYBOX" ftpd -w -A "$FTP_DIR" 2>/dev/null
 else
   "$BUSYBOX" ftpd -A "$FTP_DIR" 2>/dev/null
-fi | { IFS= read -r _greeting; exec "$BUSYBOX" cat; } >&3
+fi | {
+  IFS= read -r _greeting
+  exec "$BUSYBOX" awk '{ print; fflush() } /^211-Features:/ { printf " UTF8\r\n"; fflush() }'
+} >&3
