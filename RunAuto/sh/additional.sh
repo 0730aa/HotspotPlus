@@ -1,6 +1,6 @@
 #!/system/bin/sh
 
-. /data/adb/modules/HotspotPlus/RunAuto/sh/lib_cfg.sh
+. /data/adb/modules/HotspotPlus/RunAuto/sh/lib.sh
 
 # 获取配置文件的值
 START_ADB=$(cfg .start_adb false)
@@ -14,7 +14,6 @@ FTP_PASS=$(cfg .ftp_setting.password)
 START_AP=$(cfg .start_ap false)
 START_RNDIS=$(cfg .start_rndis false)
 
-. /data/adb/modules/HotspotPlus/RunAuto/sh/lib_ap.sh
 if ap_up; then hotspot_status="up"; else hotspot_status=""; fi
 
 START_ADB=$([ "$START_ADB" = "true" ] && echo 1 || echo 0)
@@ -72,6 +71,20 @@ if [ $START_FTP -eq 1 ]; then
 else
   echo "FTP 未开启"
 fi
+
+# 热点总开关关掉时，本模块不碰热点(也不切飞行模式)
+case "$START_AP" in
+  api|mode1|mode2)
+    # 关掉系统"无设备连接就自动关闭热点"的超时，否则开起来过一会儿又被系统关了
+    if [ "$(cfg .ap_keep_alive true)" = "true" ]; then
+      ap_no_timeout
+      echo "已关闭系统的热点空闲自动关闭"
+    fi
+    ;;
+  *)
+    echo "热点功能已关闭(start_ap=$START_AP)，本模块不会去开热点"
+    ;;
+esac
 
 if [ "$START_AP" = "mode2" ]; then
   AP_SSID=$(cfg .ap_mode2.ap_ssid Hotspotplus)

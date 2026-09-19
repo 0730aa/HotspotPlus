@@ -8,7 +8,7 @@
 BUSYBOX="${BUSYBOX:-/data/adb/magisk/busybox}"
 LOG_FILE="${LOG_FILE:-/data/adb/modules/HotspotPlus/log/ftp.log}"
 
-. "${LIB_CFG:-/data/adb/modules/HotspotPlus/RunAuto/sh/lib_cfg.sh}"
+. "${LIB_CFG:-/data/adb/modules/HotspotPlus/RunAuto/sh/lib.sh}"
 
 FTP_DIR="$1"
 FTP_UPLOAD="$2"

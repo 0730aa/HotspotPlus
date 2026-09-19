@@ -19,10 +19,8 @@ mkdir -p "$MODDIR/log"
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" | tee -a "$LOG_FILE"; }
 : > "$LOG_FILE"
 
-# 通用热点接口检测（联发科 ap0 / 高通 wlan1,softap0 / 其他）
-. "$MODDIR/RunAuto/sh/lib_ap.sh"
-# config.json 读取(cfg)
-. "$MODDIR/RunAuto/sh/lib_cfg.sh"
+# 公共函数: cfg 读配置 / ap_up 检测热点 / ap_no_timeout 关闭空闲超时
+. "$MODDIR/RunAuto/sh/lib.sh"
 
 # 打开后等待 ap0 出现，最多 wait 秒
 wait_ap() {
@@ -51,6 +49,12 @@ fi
 if ap_up; then
   log "热点已开启(ap0 存在)，无需操作"
   exit 0
+fi
+
+# 开之前先关掉系统的"空闲自动关闭热点"，否则开起来没人连，过一会儿又被系统关掉
+if [ "$(cfg .ap_keep_alive true)" = "true" ]; then
+  ap_no_timeout
+  log "已关闭系统的热点空闲自动关闭(soft_ap_timeout_enabled=0)"
 fi
 
 # 层 1: dex + app_process 调系统 API
