@@ -14,7 +14,8 @@ FTP_PASS=$(/data/adb/modules/HotspotPlus/bin/jq -r '.ftp_setting.password // ""'
 START_AP=$(/data/adb/modules/HotspotPlus/bin/jq -r '.start_ap' "$CONFIG_FILE")
 START_RNDIS=$(/data/adb/modules/HotspotPlus/bin/jq -r '.start_rndis // false' "$CONFIG_FILE")
 
-hotspot_status=$(ifconfig | grep "ap0")
+. /data/adb/modules/HotspotPlus/RunAuto/sh/lib_ap.sh
+if ap_up; then hotspot_status="up"; else hotspot_status=""; fi
 
 START_ADB=$([ "$START_ADB" = "true" ] && echo 1 || echo 0)
 START_TELNET=$([ "$START_TELNET" = "true" ] && echo 1 || echo 0)
@@ -89,6 +90,12 @@ if [ "$START_AP" = "mode2" ]; then
   echo "Executing: $CMD"
   $CMD
   echo "热点已打开（模式二）: $CMD"
+fi
+
+# 通用模式(api): 调系统 tethering API 开真热点，失败自动回退 cmd/UI
+if [ "$START_AP" = "api" ]; then
+  echo "使用通用模式(api)开启热点"
+  /data/adb/modules/HotspotPlus/RunAuto/sh/open_hotspot.sh on
 fi
 
 if [ -z "$hotspot_status" ]; then

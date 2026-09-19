@@ -13,7 +13,7 @@
       "password": ""
     },
   
-   "start_ap": "mode1",     
+   "start_ap": "api",     
    "ap_mode2": {
        "ap_ssid": "Hotspotplus",  
        "open": false,           

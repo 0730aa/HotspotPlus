@@ -9,8 +9,9 @@ START_AP=$(/data/adb/modules/HotspotPlus/bin/jq -r '.start_ap' "$CONFIG_FILE")
 AIRMODE=$(/data/adb/modules/HotspotPlus/bin/jq -r '.airmode' "$CONFIG_FILE")
 SCREEN_STATUS=$(dumpsys power | grep 'mHoldingDisplaySuspendBlocker' | awk -F= '{print $2}')
 
-# 检测热点状态
-hotspot_status=$(ifconfig | grep "ap0")
+# 检测热点状态（通用接口识别）
+. /data/adb/modules/HotspotPlus/RunAuto/sh/lib_ap.sh
+if ap_up; then hotspot_status="up"; else hotspot_status=""; fi
 
 # 如果热点关闭，开启飞行模式
 if [ -z "$hotspot_status" ]; then
@@ -30,7 +31,10 @@ if [ -z "$hotspot_status" ]; then
   fi
   
   # 开启热点，模式读取 config 文件里面
-  if [ "$START_AP" = "mode2" ]; then
+  if [ "$START_AP" = "api" ]; then
+    echo "$CURRENT_TIME - 通用模式(api)重新打开热点" | tee -a "$LOG_FILE"
+    /data/adb/modules/HotspotPlus/RunAuto/sh/open_hotspot.sh on
+  elif [ "$START_AP" = "mode2" ]; then
     AP_SSID=$(/data/adb/modules/HotspotPlus/bin/jq -r '.ap_mode2.ap_ssid' "$CONFIG_FILE")
     OPEN=$(/data/adb/modules/HotspotPlus/bin/jq -r '.ap_mode2.open' "$CONFIG_FILE")
     ENCRYPTION=$(/data/adb/modules/HotspotPlus/bin/jq -r '.ap_mode2.encryption' "$CONFIG_FILE")
