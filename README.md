@@ -6,7 +6,7 @@
 
 2. 定时启动的配置文件可在模块目录下的 config.json 这个文件里面编辑,编辑完成后手动执行 cron_update.sh 立即生效，或者重启生效。
 
-3. 开机自启服务: adb 端口、ftp 服务、telnet 服务、手机热点、USB网络共享服务，这些的开关配置也在模块目录下的 config.json
+3. 开机自启服务: adb 端口、ftp 服务、telnet 服务、手机热点、USB网络共享服务，这些的开关配置也在模块目录下的 config.json（手机热点默认使用通用方式 api，start_ap 可改）
 
 4. 增加检测热点状态脚本，保持热点常开(默认关闭，配置同样在 config.json 里面)
 
@@ -18,6 +18,23 @@
 
 # 更新日志
 
+
+- **HotspotPlus_v8.3**
+
+      1. 热点默认开启方式改为 api（通用方式，config.json 的 start_ap 默认值由 mode1 改为 api）。仍可改回 mode1/mode2
+      2. 文档同步说明
+
+- **HotspotPlus_v8.2**
+
+      1. api 补全 Android 11+ 路径：经 ServiceManager 调 tethering 服务 ITetheringConnector.startTethering，配合原有 Android 7~10 的 connectivity 路径，覆盖 Android 7~14
+      2. 通用热点接口识别：热点网卡命名因芯片而异(联发科 ap0；高通 wlan1/softap0/swlan0；其他 uap0 等)，新增 lib_ap.sh 统一识别(已知名 + 192.168.x.1 网关兜底)，additional/hotspot_status/open_hotspot 三处共用，不再只认 ap0
+      3. 层2(cmd wifi start-softap)仅 Android 11+ 尝试，避免旧系统无谓报错
+
+- **HotspotPlus_v8.1**
+
+      1. 新增通用开热点方式 api（在 config.json 把 start_ap 设为 "api"）：通过 app_process 直接经 ServiceManager 调用系统 connectivity 服务的 startTethering，开的是与系统"个人热点"同源、带网络共享的真热点，SSID/密码沿用系统设置。不依赖屏幕/分辨率/语言，且规避了 MIUI 等 ROM 在获取 Context 阶段的崩溃（适配 Android 7~10）
+      2. 分层回退：api(binder) 失败 -> cmd wifi start-softap(仅 Android 11+) -> uiautomator 精确点击(含 MIUI SlidingButton)，每层都用 ap0 检测是否成功
+      3. 目的：解决部分机型模式一/模式二都打不开热点的问题，提升机型通用性（注：安卓热点受 ROM 定制影响大，无法保证 100% 全机型，若失败请查看 log/open_hotspot.log 反馈）
 
 - **HotspotPlus_v7.9**
 
