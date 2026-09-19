@@ -7,17 +7,51 @@
 2. 定时启动的配置文件可在模块目录下的 config.json 这个文件里面编辑,编辑完成后手动执行 cron_update.sh 立即生效，或者重启生效。
 
 3. 开机自启服务: adb 端口、ftp 服务、telnet 服务、手机热点、USB网络共享服务，这些的开关配置也在模块目录下的 config.json（手机热点默认使用通用方式 api，start_ap 可改）
+     - ftp 的共享目录、端口、是否允许上传、账号密码都在 config.json 的 ftp_setting 里设置。默认只共享 /sdcard(手机内部存储)，如果确实需要共享整个系统再把 dir 改成 "/"
+     - ftp 的 password 留空就是免登录(和以前一样)，填了密码就要用 user + password 登录
 
 4. 增加检测热点状态脚本，保持热点常开(默认关闭，配置同样在 config.json 里面)
+     - 三个定时检测(热点/USB共享/frpc)已合并为一个 check.sh，分别是 `check.sh ap`、`check.sh usb`、`check.sh frpc`。旧 config.json 里写的旧文件名会被 cron_update.sh 自动映射，不用改
+     - 每个检测都会先看 config.json 里对应的总开关，开关是关的就什么都不做。比如只想用 frp、把 start_ap 设成 false，热点检测就不会再去切飞行模式或开热点
+     - ap_keep_alive(默认 true) 会关掉系统自带的"热点没有设备连接就自动关闭"，解决热点没人连一会儿就自己关掉的问题
 
-5. frp 更多特性请自主前往官网查看，https://github.com/fatedier/frp
+5. 热点开启方式说明: 推荐用 api(默认)
+     - api 走的是系统的网络共享(tethering)，和你在设置里手动开热点是同一套东西，连上的设备能正常上网，IPv6 是否可用取决于运营商和 ROM
+     - mode2 用的 `cmd wifi start-softap` 起的是"本地热点"，不会启动系统的网络共享流程，所以部分机型会出现连上了没网、或者没有 IPv6 的情况。遇到这种情况请改用 api
 
-6. 更新比较快的通道是蓝奏云，请自行前往查看是否需要更新 https://wwm.lanzouo.com/b00g2dgwmd
+6. frp 更多特性请自主前往官网查看，https://github.com/fatedier/frp
 
-7. 贡献: 请在 github 项目上给我点⭐️😘 https://github.com/0730aa/HotspotPlus
+7. 更新比较快的通道是蓝奏云，请自行前往查看是否需要更新 https://wwm.lanzouo.com/b00g2dgwmd
+
+8. 贡献: 请在 github 项目上给我点⭐️😘 https://github.com/0730aa/HotspotPlus
 
 # 更新日志
 
+
+- **HotspotPlus_v8.5**
+
+      1. 修复 ap_keep_alive 不生效(热点没人连还是会自动关闭，系统设置里的"自动关闭热点"开关也纹丝不动)。
+         原因是安卓 11 起这个开关已经从 Settings.Global.soft_ap_timeout_enabled 挪进了 SoftApConfiguration，
+         再写 settings 没有任何效果。现在改为经 hotspotctl.dex 调 IWifiManager:
+         getSoftApConfiguration -> Builder.setAutoShutdownEnabled(false) -> setSoftApConfiguration，
+         并回读确认是否真的改成功(结果记在 log/open_hotspot.log)。安卓 10 及以下仍走原来的 Settings.Global
+      2. 修复热点已经开着时不会去改这个配置的问题(上一版把它放在了"热点已开就退出"之后)
+      3. 注意: 改的是热点配置，对"下一次开启热点"生效。如果热点当前正开着，需要它重开一次(或手动关一次再开)才会真正不再自动关闭
+      4. 移除开机时对 /data/data/com.android.providers.telephony 的 chmod 777。新的短信转发走系统接口读短信，不再需要直接读数据库文件，这条只会白白放开系统短信库的权限
+
+- **HotspotPlus_v8.4**
+
+      1. ftp 共享目录可以自己指定(config.json 里的 ftp_setting.dir)，默认由根目录 / 改为 /sdcard，避免整个系统被局域网里的设备读写
+      2. ftp 新增账号密码登录(ftp_setting.user / ftp_setting.password)，password 留空则和以前一样免登录
+      3. ftp 新增自定义端口号(ftp_setting.port)和只读共享开关(ftp_setting.allow_upload)
+      4. ftp 修复中文文件名变成乱码 0 字节垃圾文件的问题: busybox ftpd 不宣告 UTF8，客户端会退回自己系统的编码(中文 Windows 为 GBK)发文件名，这些字节在只认 UTF-8 的安卓 /sdcard 上就成了乱码。现在由 ftp_login.sh 统一宣告 UTF8 并接受 OPTS UTF8 ON
+      5. ftp 共享目录填错(目录不存在)时不再启动服务，并在 service.log 里给出提示
+      6. 新增 lib.sh 统一读取配置，各脚本里的 jq 调用统一成 cfg .ftp_setting.port 21 这种短写法; 顺带修掉了配置里缺某个键时会取到 null 的问题(现在会回落到默认值)
+      7. 修复 start_ap 设为 false(只想用 frp)时，热点检测脚本仍然会去切飞行模式、并因此把热点带起来的问题。现在每个定时检测都先看自己的总开关，关了就什么都不做
+      8. 新增 ap_keep_alive(默认开)，关掉系统"热点无设备连接自动关闭"的超时，解决热点没人连就自己关、热点检测也救不回来的问题
+      9. 短信转发改为直接查系统短信库(content://sms/inbox)，不再依赖通知、也不再写死 com.android.mms 包名。以前默认短信应用不是这个包名(谷歌 Messages、三星等)就一条都转发不出去。退回通知方式时包名也改为自动识别
+      10. 精简脚本: hotspot_status.sh + rndis_status.sh + keepfrpc.sh 合并为 check.sh，lib_cfg.sh + lib_ap.sh 合并为 lib.sh，frp 一键启动与 frpc.sh 不再各写一份(RunAuto/sh 由 14 个文件减到 11 个)
+      11. 修复 frp/一键停止.sh 是空文件(执行了等于没执行)、一键关闭所有服务.sh 关不掉短信转发进程且会刷一屏 kill 报错、随包发布的 crontabs/root 仍指向旧模块名 autofrp 等遗留问题
 
 - **HotspotPlus_v8.3**
 

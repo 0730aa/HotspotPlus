@@ -5,8 +5,16 @@
   "start_telnet": false, 
   
   "start_ftp": false,
+  "ftp_setting": {
+      "port": 21,
+      "dir": "/sdcard",
+      "allow_upload": true,
+      "user": "hotspot",
+      "password": ""
+    },
   
-   "start_ap": "api",     
+   "start_ap": "api",
+   "ap_keep_alive": true,     
    "ap_mode2": {
        "ap_ssid": "Hotspotplus",  
        "open": false,           
@@ -30,24 +38,28 @@
       "comment": "frpc 进程定时检测（默认关闭，建议用frp里面的自动连接功能，即把自动退出功能关闭）。每 5 分钟检测一次 frpc 进程是否存在，不存在的话就按照脚本逻辑，重新启动 frpc。已经存在就不操作",
       "enabled": false,
       "schedule": "*/4 * * * *",
-      "command": "/data/adb/modules/HotspotPlus/RunAuto/sh/keepfrpc.sh"
+      "command": "/data/adb/modules/HotspotPlus/RunAuto/sh/check.sh frpc"
     },
     {
       "comment": "热点状态检测 (默认关闭)。开启方式按照上方选的开机自启热点的模式。每 3 分钟检测一次热点是否开启，如果关闭，则开启飞行模式(当上面的 airmode 为 true 时才会开启飞行模式，否则不会开飞行模式，直接执行开热点命令)，延时 10s 后关闭飞行模式并打开热点",
       "enabled": false,
       "schedule": "*/3 * * * *",
-      "command": "/data/adb/modules/HotspotPlus/RunAuto/sh/hotspot_status.sh"
+      "command": "/data/adb/modules/HotspotPlus/RunAuto/sh/check.sh ap"
     },
     {
       "comment": "USB 网络共享检测（默认关闭）每过 2 分钟自动检测 USB共享 是否打开，如果关闭则执行打开命令，已经打开则不作动作",
       "enabled": false,
       "schedule": "*/2 * * * *",
-      "command": "/data/adb/modules/HotspotPlus/RunAuto/sh/rndis_status.sh"
+      "command": "/data/adb/modules/HotspotPlus/RunAuto/sh/check.sh usb"
     }
   ],
 
   
-  "sms_forwarding_enabled": false,    
+  "sms_forwarding_enabled": false,
+  "sms_setting": {
+      "method": "auto",
+      "poll_seconds": 5
+    },    
     
   "webhook": {
     "url": "https://oapi.dingtalk.com/robot/send?access_token"

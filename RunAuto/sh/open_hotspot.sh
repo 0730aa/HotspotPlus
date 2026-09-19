@@ -10,7 +10,6 @@
 # ============================================================================
 
 MODDIR="/data/adb/modules/HotspotPlus"
-JQ="$MODDIR/bin/jq"
 DEX="$MODDIR/bin/hotspotctl.dex"
 CONFIG_FILE="$MODDIR/config.json"
 LOG_FILE="$MODDIR/log/open_hotspot.log"
@@ -20,8 +19,8 @@ mkdir -p "$MODDIR/log"
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" | tee -a "$LOG_FILE"; }
 : > "$LOG_FILE"
 
-# 通用热点接口检测（联发科 ap0 / 高通 wlan1,softap0 / 其他）
-. "$MODDIR/RunAuto/sh/lib_ap.sh"
+# 公共函数: cfg 读配置 / ap_up 检测热点 / ap_no_timeout 关闭空闲超时
+. "$MODDIR/RunAuto/sh/lib.sh"
 
 # 打开后等待 ap0 出现，最多 wait 秒
 wait_ap() {
@@ -47,8 +46,16 @@ if [ "$ACTION" = "off" ]; then
 fi
 
 # ---------------- on ----------------
+# 先关掉系统的"空闲无设备连接自动关闭热点"。
+# 放在"热点已开就退出"之前，是因为热点已经开着时同样需要改掉这个配置，
+# 否则它还是会在没人连的时候把热点关掉
+if [ "$(cfg .ap_keep_alive true)" = "true" ]; then
+  log "关闭系统的热点空闲自动关闭:"
+  ap_no_timeout 2>&1 | while read -r l; do log "  $l"; done
+fi
+
 if ap_up; then
-  log "热点已开启(ap0 存在)，无需操作"
+  log "热点已开启，无需操作"
   exit 0
 fi
 
@@ -65,11 +72,11 @@ fi
 # 层 2: cmd wifi start-softap（Android 11+ 才有该命令；≤10 直接跳过）
 SDK=$(getprop ro.build.version.sdk 2>/dev/null)
 if command -v cmd >/dev/null 2>&1 && [ "${SDK:-0}" -ge 30 ] 2>/dev/null; then
-  AP_SSID=$("$JQ" -r '.ap_mode2.ap_ssid // "Hotspotplus"' "$CONFIG_FILE" 2>/dev/null)
-  OPEN=$("$JQ" -r '.ap_mode2.open // false' "$CONFIG_FILE" 2>/dev/null)
-  ENC=$("$JQ" -r '.ap_mode2.encryption // "wpa2"' "$CONFIG_FILE" 2>/dev/null)
-  PWD_=$("$JQ" -r '.ap_mode2.password // "88888888"' "$CONFIG_FILE" 2>/dev/null)
-  BAND=$("$JQ" -r '.ap_mode2.band // 2' "$CONFIG_FILE" 2>/dev/null)
+  AP_SSID=$(cfg .ap_mode2.ap_ssid Hotspotplus)
+  OPEN=$(cfg .ap_mode2.open false)
+  ENC=$(cfg .ap_mode2.encryption wpa2)
+  PWD_=$(cfg .ap_mode2.password 88888888)
+  BAND=$(cfg .ap_mode2.band 2)
   if [ "$OPEN" = "true" ]; then
     CMD="cmd wifi start-softap $AP_SSID open -b$BAND"
   else

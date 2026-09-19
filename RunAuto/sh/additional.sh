@@ -1,16 +1,19 @@
 #!/system/bin/sh
 
-CONFIG_FILE="/data/adb/modules/HotspotPlus/config.json"
+. /data/adb/modules/HotspotPlus/RunAuto/sh/lib.sh
 
 # 获取配置文件的值
-START_ADB=$(/data/adb/modules/HotspotPlus/bin/jq -r '.start_adb // false' "$CONFIG_FILE")
-ADB_PORT=$(/data/adb/modules/HotspotPlus/bin/jq -r '.adb_port' "$CONFIG_FILE")
-START_TELNET=$(/data/adb/modules/HotspotPlus/bin/jq -r '.start_telnet // false' "$CONFIG_FILE")
-START_FTP=$(/data/adb/modules/HotspotPlus/bin/jq -r '.start_ftp // false' "$CONFIG_FILE")
-START_AP=$(/data/adb/modules/HotspotPlus/bin/jq -r '.start_ap' "$CONFIG_FILE")
-START_RNDIS=$(/data/adb/modules/HotspotPlus/bin/jq -r '.start_rndis // false' "$CONFIG_FILE")
+START_ADB=$(cfg .start_adb false)
+ADB_PORT=$(cfg .adb_port 5555)
+START_TELNET=$(cfg .start_telnet false)
+START_FTP=$(cfg .start_ftp false)
+FTP_PORT=$(cfg .ftp_setting.port 21)
+FTP_DIR=$(cfg .ftp_setting.dir /sdcard)
+FTP_UPLOAD=$(cfg .ftp_setting.allow_upload true)
+FTP_PASS=$(cfg .ftp_setting.password)
+START_AP=$(cfg .start_ap false)
+START_RNDIS=$(cfg .start_rndis false)
 
-. /data/adb/modules/HotspotPlus/RunAuto/sh/lib_ap.sh
 if ap_up; then hotspot_status="up"; else hotspot_status=""; fi
 
 START_ADB=$([ "$START_ADB" = "true" ] && echo 1 || echo 0)
@@ -36,18 +39,60 @@ else
 fi
 
 if [ $START_FTP -eq 1 ]; then
-  /data/adb/magisk/busybox tcpsvd -vE 0.0.0.0 21 /data/adb/magisk/busybox ftpd -wA / &> /dev/null &
-  echo "FTP 已开启"
+  # 端口不是纯数字时回落到默认的 21
+  case "$FTP_PORT" in
+    ''|*[!0-9]*) FTP_PORT=21 ;;
+  esac
+
+  if [ ! -d "$FTP_DIR" ]; then
+    echo "FTP 未开启: 共享目录 $FTP_DIR 不存在，请检查 config.json 里的 ftp_setting.dir"
+  else
+    if [ "$FTP_DIR" = "/" ]; then
+      echo "警告: FTP 共享目录为根目录 /，局域网内的设备可以看到整个系统，建议改成 /sdcard"
+    fi
+
+    if [ "$FTP_UPLOAD" = "true" ]; then
+      FTP_MODE="可上传"
+    else
+      FTP_MODE="只读"
+    fi
+
+    if [ -n "$FTP_PASS" ]; then
+      FTP_AUTH="需账号密码登录"
+    else
+      FTP_AUTH="免登录"
+    fi
+
+    # 连接先交给 ftp_login.sh 处理 UTF-8 协商和账号密码，再转给 ftpd。
+    # ftpd 的 -A 是免登录(校验已经在前面做完)，共享目录会被 chroot 成 FTP 的根目录，出不去
+    /data/adb/magisk/busybox tcpsvd -vE 0.0.0.0 "$FTP_PORT" /data/adb/modules/HotspotPlus/RunAuto/sh/ftp_login.sh "$FTP_DIR" "$FTP_UPLOAD" >/dev/null 2>&1 &
+    echo "FTP 已开启，端口号: $FTP_PORT，共享目录: $FTP_DIR，$FTP_MODE，$FTP_AUTH"
+  fi
 else
   echo "FTP 未开启"
 fi
 
+# 热点总开关关掉时，本模块不碰热点(也不切飞行模式)
+case "$START_AP" in
+  mode1|mode2)
+    # 关掉系统"无设备连接就自动关闭热点"(api 方式由 open_hotspot.sh 内部处理)
+    if [ "$(cfg .ap_keep_alive true)" = "true" ]; then
+      ap_no_timeout >/dev/null 2>&1
+      echo "已关闭系统的热点空闲自动关闭"
+    fi
+    ;;
+  api) ;;
+  *)
+    echo "热点功能已关闭(start_ap=$START_AP)，本模块不会去开热点"
+    ;;
+esac
+
 if [ "$START_AP" = "mode2" ]; then
-  AP_SSID=$(/data/adb/modules/HotspotPlus/bin/jq -r '.ap_mode2.ap_ssid' "$CONFIG_FILE")
-  OPEN=$(/data/adb/modules/HotspotPlus/bin/jq -r '.ap_mode2.open' "$CONFIG_FILE")
-  ENCRYPTION=$(/data/adb/modules/HotspotPlus/bin/jq -r '.ap_mode2.encryption' "$CONFIG_FILE")
-  PASSWORD=$(/data/adb/modules/HotspotPlus/bin/jq -r '.ap_mode2.password' "$CONFIG_FILE")
-  BAND=$(/data/adb/modules/HotspotPlus/bin/jq -r '.ap_mode2.band' "$CONFIG_FILE")
+  AP_SSID=$(cfg .ap_mode2.ap_ssid Hotspotplus)
+  OPEN=$(cfg .ap_mode2.open false)
+  ENCRYPTION=$(cfg .ap_mode2.encryption wpa2)
+  PASSWORD=$(cfg .ap_mode2.password)
+  BAND=$(cfg .ap_mode2.band 2)
 
   if [ "$OPEN" = "true" ]; then
     CMD="cmd wifi start-softap $AP_SSID open -b$BAND"
