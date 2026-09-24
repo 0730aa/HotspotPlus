@@ -40,28 +40,19 @@
 
 - **HotspotPlus_v8.5**
 
-      1. 修复 ap_keep_alive 不生效(热点没人连还是会自动关闭，系统设置里的"自动关闭热点"开关也纹丝不动)。
-         原因是安卓 11 起这个开关已经从 Settings.Global.soft_ap_timeout_enabled 挪进了 SoftApConfiguration，
-         再写 settings 没有任何效果。现在改为经 hotspotctl.dex 调 IWifiManager:
-         getSoftApConfiguration -> Builder.setAutoShutdownEnabled(false) -> setSoftApConfiguration，
-         并回读确认是否真的改成功(结果记在 log/open_hotspot.log)。安卓 10 及以下仍走原来的 Settings.Global
-      2. 修复热点已经开着时不会去改这个配置的问题(上一版把它放在了"热点已开就退出"之后)
-      3. 注意: 改的是热点配置，对"下一次开启热点"生效。如果热点当前正开着，需要它重开一次(或手动关一次再开)才会真正不再自动关闭
-      4. 移除开机时对 /data/data/com.android.providers.telephony 的 chmod 777。新的短信转发走系统接口读短信，不再需要直接读数据库文件，这条只会白白放开系统短信库的权限
+      1. 修复 ap_keep_alive 在安卓 11+ 不生效，热点没人连仍会自动关闭(对下一次开热点生效)
+      2. 修复热点已开启时不会去关闭"空闲自动关闭"的问题
+      3. 移除开机时对系统短信库目录的 chmod 777
 
 - **HotspotPlus_v8.4**
 
-      1. ftp 共享目录可以自己指定(config.json 里的 ftp_setting.dir)，默认由根目录 / 改为 /sdcard，避免整个系统被局域网里的设备读写
-      2. ftp 新增账号密码登录(ftp_setting.user / ftp_setting.password)，password 留空则和以前一样免登录
-      3. ftp 新增自定义端口号(ftp_setting.port)和只读共享开关(ftp_setting.allow_upload)
-      4. ftp 修复中文文件名变成乱码 0 字节垃圾文件的问题: busybox ftpd 不宣告 UTF8，客户端会退回自己系统的编码(中文 Windows 为 GBK)发文件名，这些字节在只认 UTF-8 的安卓 /sdcard 上就成了乱码。现在由 ftp_login.sh 统一宣告 UTF8 并接受 OPTS UTF8 ON
-      5. ftp 共享目录填错(目录不存在)时不再启动服务，并在 service.log 里给出提示
-      6. 新增 lib.sh 统一读取配置，各脚本里的 jq 调用统一成 cfg .ftp_setting.port 21 这种短写法; 顺带修掉了配置里缺某个键时会取到 null 的问题(现在会回落到默认值)
-      7. 修复 start_ap 设为 false(只想用 frp)时，热点检测脚本仍然会去切飞行模式、并因此把热点带起来的问题。现在每个定时检测都先看自己的总开关，关了就什么都不做
-      8. 新增 ap_keep_alive(默认开)，关掉系统"热点无设备连接自动关闭"的超时，解决热点没人连就自己关、热点检测也救不回来的问题
-      9. 短信转发改为直接查系统短信库(content://sms/inbox)，不再依赖通知、也不再写死 com.android.mms 包名。以前默认短信应用不是这个包名(谷歌 Messages、三星等)就一条都转发不出去。退回通知方式时包名也改为自动识别
-      10. 精简脚本: hotspot_status.sh + rndis_status.sh + keepfrpc.sh 合并为 check.sh，lib_cfg.sh + lib_ap.sh 合并为 lib.sh，frp 一键启动与 frpc.sh 不再各写一份(RunAuto/sh 由 14 个文件减到 11 个)
-      11. 修复 frp/一键停止.sh 是空文件(执行了等于没执行)、一键关闭所有服务.sh 关不掉短信转发进程且会刷一屏 kill 报错、随包发布的 crontabs/root 仍指向旧模块名 autofrp 等遗留问题
+      1. ftp 支持自定义共享目录、端口、只读，新增账号密码登录，默认共享目录改为 /sdcard
+      2. 修复 ftp 中文文件名乱码
+      3. 新增 ap_keep_alive，关闭系统"热点无设备连接自动关闭"
+      4. 修复 start_ap 设为 false 时热点检测仍会切飞行模式
+      5. 短信转发改为直接读取系统短信库，兼容更多短信应用
+      6. 精简脚本，三个定时检测合并为 check.sh
+      7. 修复一键停止、一键关闭等脚本的遗留问题
 
 - **HotspotPlus_v8.3**
 
