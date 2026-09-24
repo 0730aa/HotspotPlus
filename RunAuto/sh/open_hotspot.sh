@@ -24,13 +24,13 @@ log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" | tee -a "$LOG_FILE"; }
 # 公共函数: cfg 读配置 / ap_up 检测热点 / ap_sys_info 问系统 / ap_no_timeout 关闭空闲超时
 . "$MODDIR/RunAuto/sh/lib.sh"
 
-# 打开后等待热点起来，最多 wait 秒。循环里只做快速检测，
-# 最后再问一次系统(网卡名不在名单里时靠这一步兜底)，顺带更新 AP_SYS_STATE
+# 打开后等待热点起来，最多 wait 秒。循环里只做快速检测，快速检测说开了再用 ap_up 确认
+# (快速检测在系统答不上来时是按网卡名猜的)；最后再问一次系统，顺带更新 AP_SYS_STATE
 wait_ap() {
   w="${1:-6}"
   i=0
   while [ "$i" -lt "$w" ]; do
-    if ap_up_fast; then return 0; fi
+    if ap_up_fast && ap_up; then return 0; fi
     sleep 1
     i=$((i + 1))
   done
@@ -155,13 +155,25 @@ case "$(screen_state)" in
   off) input keyevent 224; WOKE=1; sleep 1 ;;
   *) input keyevent 224; sleep 1 ;;
 esac
-# 屏幕本来亮着且没锁屏时不滑，免得在用户正在用的 App 里乱滑
+# 屏幕本来亮着且没锁屏时什么都不做，免得在用户正在用的 App 里乱滑
 if [ "$WOKE" = 1 ] || keyguard_showing; then
   wm dismiss-keyguard >/dev/null 2>&1; sleep 1
-  SIZE=$(wm size 2>/dev/null | tail -1 | grep -oE '[0-9]+x[0-9]+')
-  SW=${SIZE%x*}; SH=${SIZE#*x}
-  case "$SW$SH" in ''|*[!0-9]*) SW=1080; SH=2400 ;; esac
-  input swipe $((SW / 2)) $((SH * 4 / 5)) $((SW / 2)) $((SH / 5)) 300; sleep 2
+  # 解不开(或判断不了)再上滑一次
+  if keyguard_showing || [ "$WOKE" = 1 ]; then
+    SIZE=$(wm size 2>/dev/null | tail -1 | grep -oE '[0-9]+x[0-9]+')
+    SW=${SIZE%x*}; SH=${SIZE#*x}
+    case "$SW$SH" in ''|*[!0-9]*) SW=1080; SH=2400 ;; esac
+    input swipe $((SW / 2)) $((SH * 4 / 5)) $((SW / 2)) $((SH / 5)) 300; sleep 2
+  fi
+  # 还在锁屏说明设了密码/图案/指纹，模块解不开。这时不打开设置页:
+  # 打开了也会压在锁屏后面点不到，锁屏上 HOME 键也不管用，用户解锁后反而会看到这个页面
+  if keyguard_showing; then
+    input keyevent 4                          # 收起可能弹出来的密码输入界面
+    [ "$WOKE" = 1 ] && input keyevent 223     # 原来是灭屏的就灭回去
+    log "层3 跳过: 锁屏设了密码，模块解不开，不打开设置页"
+    log "热点未能开启，请查看日志排查"
+    exit 1
+  fi
 fi
 
 # 前台窗口所属的包名(mCurrentFocus)，拿不到(锁屏、切换中等)输出空
@@ -323,7 +335,7 @@ DUMP="$MODDIR/log/ui_dump.xml"
 last_enter=""
 for attempt in 1 2 3 4; do
   log "  层3 第 $attempt 次尝试"
-  if ap_up_fast; then break; fi
+  if ap_up_fast && ap_up; then break; fi
   # 优先 dump 到模块日志目录，失败再退到 /sdcard
   if ! uiautomator dump "$DUMP" >/dev/null 2>&1; then
     DUMP="/sdcard/hotspotplus_ui.xml"

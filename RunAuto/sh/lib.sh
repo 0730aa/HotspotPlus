@@ -14,8 +14,10 @@
 #     jq '.x // true'   在 x 为 false 时会错误地返回 true
 #
 # 二、热点
-#   ap_up                  热点已开返回 0，否则返回 1(网卡检测 + 问系统，准)
-#   ap_up_fast             只做网卡/网络共享检测，不起 app_process，适合循环里等热点
+#   ap_up                  热点已开返回 0，否则返回 1。准，判断顺序:
+#                            网络共享服务 -> WifiManager(dex) -> 都答不上来才按网卡名猜
+#   ap_up_fast             只问网络共享服务(答不上来才猜)，不起 app_process，适合循环里等热点；
+#                          结果是"猜"出来的时候不够准，要用 ap_up 再确认
 #   ap_sys_info            问系统热点状态和系统设置里保存的热点名称，
 #                          结果放在 AP_SYS_STATE(13=已开启) / AP_SYS_SSID
 #   ap_no_timeout          关掉系统"无设备连接自动关闭热点"的超时
@@ -73,11 +75,16 @@ _ap_tethered() {
 }
 
 ap_up_fast() {
-  # 0) 问系统网络共享服务，不认网卡名；系统答得上来就以它为准
+  # 问系统网络共享服务，不认网卡名；系统答得上来就以它为准，答不上来才猜
   _ap_tethered
   _r=$?
   [ "$_r" -eq 2 ] || return "$_r"
-  # 以下是系统答不上来时的猜测
+  _ap_guess
+}
+
+# 按网卡名和网关地址猜。系统两种问法都答不上来时才用，
+# 高通"双 WLAN 加速"开着时 wlan1 会被误认成热点
+_ap_guess() {
   # 1) busybox/toybox ifconfig 默认只列 UP 接口：命中已知名即认为热点开启
   if ifconfig 2>/dev/null | grep -qE "$AP_IFACE_RE"; then
     return 0
@@ -110,11 +117,22 @@ ap_sys_info() {
   [ -n "$AP_SYS_STATE" ]
 }
 
-# 网卡检测没认出来时再问一次系统(要起一次 app_process，约 1 秒)，
-# 避免把"已经开着的热点"当成没开，接着去重复开热点、切飞行模式、点屏幕
+# 准确判断热点是否已开:
+#   1) 网络共享服务说有 -> 开着
+#   2) 问 WifiManager(要起一次 app_process，约 1 秒)，它答得上来就以它为准。
+#      网络共享服务说没有时也要问，防止热点不走网络共享服务的 ROM 被当成没开，
+#      接着去重复开热点、切飞行模式、点屏幕
+#   3) 两个都答不上来才按网卡名猜
 ap_up() {
-  ap_up_fast && return 0
-  ap_sys_info && [ "$AP_SYS_STATE" = "13" ]
+  _ap_tethered
+  _r=$?
+  [ "$_r" -eq 0 ] && return 0
+  if ap_sys_info; then
+    [ "$AP_SYS_STATE" = "13" ]
+    return $?
+  fi
+  [ "$_r" -eq 1 ] && return 1
+  _ap_guess
 }
 
 # ---------------------------------------------------------------------------
