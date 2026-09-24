@@ -22,6 +22,7 @@ import java.lang.reflect.Method;
 public final class HotspotCtl {
 
     private static final int TETHERING_WIFI = 0;
+    private static final int CONNECTIVITY_SCOPE_GLOBAL = 1;
     private static final int WIFI_AP_STATE_ENABLED = 13;
     private static final String[] PKG_CANDIDATES = { "com.android.shell", "android", null };
 
@@ -107,11 +108,26 @@ public final class HotspotCtl {
             setInt(req, "tetheringType", TETHERING_WIFI);
             setBool(req, "showProvisioningUi", false);
             setBool(req, "exemptFromEntitlementCheck", false);
+            // 安卓 12+ 才有这个字段: 明确要"带网络共享"的热点，而不是本地热点
+            setInt(req, "connectivityScope", CONNECTIVITY_SCOPE_GLOBAL);
             // localIPv4Address / staticClientAddress 保持 null，沿用系统默认配置
             log("TetheringRequestParcel 构造完成");
             return req;
         } catch (Throwable t) {
             log("构造 TetheringRequestParcel 失败: " + rootMsg(t));
+            return null;
+        }
+    }
+
+    private static Object buildTetheringRequestObject() {
+        try {
+            Class<?> bCls = Class.forName("android.net.TetheringManager$TetheringRequest$Builder");
+            Object b = bCls.getConstructor(int.class).newInstance(Integer.valueOf(TETHERING_WIFI));
+            try { bCls.getMethod("setShouldShowEntitlementUi", boolean.class).invoke(b, Boolean.FALSE); }
+            catch (Throwable ignored) {}
+            return bCls.getMethod("build").invoke(b);
+        } catch (Throwable t) {
+            log("构造 TetheringRequest 失败: " + rootMsg(t));
             return null;
         }
     }
@@ -131,6 +147,12 @@ public final class HotspotCtl {
             else if (pt[i] == boolean.class) a[i] = Boolean.FALSE;
             else if (pt[i] == String.class) a[i] = pkg;
             else if ("android.net.TetheringRequestParcel".equals(n)) { if (req == null) return null; a[i] = req; }
+            else if ("android.net.TetheringManager$TetheringRequest".equals(n)) {
+                // 以防新系统把参数换成 TetheringRequest 本身
+                Object r = buildTetheringRequestObject();
+                if (r == null) return null;
+                a[i] = r;
+            }
             else if ("android.net.IIntResultListener".equals(n)) a[i] = listener; // 允许 null
             else return null;
         }

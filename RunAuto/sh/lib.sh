@@ -39,12 +39,15 @@ cfg_raw() {
 # 不同芯片/ROM 的热点网卡命名不同:
 #   联发科(天玑) ap0 ; 高通(骁龙) wlan1 / wlan2(vivo/iQOO) / softap0 / swlan0 ;
 #   其他 uap0 / ap_br0 等
-# 名单永远列不全，所以先问系统的网络共享服务，名单只做兜底
+# 名单永远列不全，而且高通机型开了"双 WLAN 加速"时 wlan1 可能是第二个 Wi-Fi
+# 连接而不是热点。所以先问系统的网络共享服务，系统答得上来就以它为准，
+# 答不上来(老系统/改过的 ROM)才用下面的网卡名单和网关地址猜
 # ---------------------------------------------------------------------------
 AP_IFACE_RE='^(ap0|wlan1|softap0|swlan0|uap0|ap_br0)'
 HOTSPOTCTL_DEX="/data/adb/modules/HotspotPlus/bin/hotspotctl.dex"
 
-# 系统网络共享服务里处于"已共享"的 Wi-Fi 网卡(热点)，有就返回 0。
+# 系统网络共享服务里有没有处于"已共享"的 Wi-Fi 网卡(热点)。
+# 返回 0=有  1=没有  2=拿不到(dumpsys 没有 Tether state 段)
 # dumpsys 的 Tether state 段形如 "wlan2 - TetheredState - lastError = 0"，
 # USB(rndis0/ncm0)、蓝牙(bt-pan) 共享也会出现在这里，所以只认无线网卡，
 # 另外排除 WLAN 直连(p2p-*)
@@ -55,6 +58,7 @@ _ap_tethered() {
   else
     _dump=$(dumpsys connectivity tethering 2>/dev/null)
   fi
+  case "$_dump" in *"Tether state"*) ;; *) return 2 ;; esac
   for _if in $(echo "$_dump" | grep -E ' - (TetheredState|LocalHotspotState)' \
                  | sed 's/^[[:space:]]*//; s/ - .*//'); do
     case "$_if" in p2p*) continue ;; esac
@@ -69,10 +73,11 @@ _ap_tethered() {
 }
 
 ap_up_fast() {
-  # 0) 问系统网络共享服务，不认网卡名
-  if _ap_tethered; then
-    return 0
-  fi
+  # 0) 问系统网络共享服务，不认网卡名；系统答得上来就以它为准
+  _ap_tethered
+  _r=$?
+  [ "$_r" -eq 2 ] || return "$_r"
+  # 以下是系统答不上来时的猜测
   # 1) busybox/toybox ifconfig 默认只列 UP 接口：命中已知名即认为热点开启
   if ifconfig 2>/dev/null | grep -qE "$AP_IFACE_RE"; then
     return 0

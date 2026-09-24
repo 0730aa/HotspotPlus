@@ -105,13 +105,15 @@ if command -v cmd >/dev/null 2>&1 && [ "${SDK:-0}" -ge 30 ] 2>/dev/null; then
   ENC=$(cfg .ap_mode2.encryption wpa2)
   PWD_=$(cfg .ap_mode2.password 88888888)
   BAND=$(cfg .ap_mode2.band 2)
+  # 参数逐个加引号传，热点名称里有空格也不会被拆开；日志里不写明文密码
   if [ "$OPEN" = "true" ]; then
-    CMD="cmd wifi start-softap $AP_SSID open -b$BAND"
+    set -- open
+    log "层2: cmd wifi start-softap \"$AP_SSID\" open -b$BAND"
   else
-    CMD="cmd wifi start-softap $AP_SSID $ENC $PWD_ -b$BAND"
+    set -- "$ENC" "$PWD_"
+    log "层2: cmd wifi start-softap \"$AP_SSID\" $ENC ******** -b$BAND"
   fi
-  log "层2: $CMD"
-  $CMD 2>&1 | while read -r l; do log "  cmd> $l"; done
+  cmd wifi start-softap "$AP_SSID" "$@" "-b$BAND" 2>&1 | while read -r l; do log "  cmd> $l"; done
   if wait_ap 6 || ap_settled; then log "层2 成功: 热点已开"; log_ssid cfg; exit 0; fi
   log "层2 未生效(系统热点状态=${AP_SYS_STATE:-未知})，进入层3"
 else
@@ -119,14 +121,69 @@ else
 fi
 
 # 层 3: uiautomator 找到设置里的热点开关再点
-log "层3: UI 自动化开热点"
-# 唤醒并解锁
-SCREEN=$(dumpsys power 2>/dev/null | grep 'mHoldingDisplaySuspendBlocker' | awk -F= '{print $2}')
-if [ "$SCREEN" != "true" ]; then
-  input keyevent 26; sleep 1
+# 会亮屏并弹出设置界面，不想要可以在 config.json 里把 ap_ui_fallback 设为 false
+if [ "$(cfg .ap_ui_fallback true)" != "true" ]; then
+  log "层3 跳过: config.json 里 ap_ui_fallback=false(不弹出设置界面)"
+  log "热点未能开启，请查看日志排查"
+  exit 1
 fi
-input swipe 300 1500 300 400 300; sleep 2
-am start -n com.android.settings/.TetherSettings -f 0x00000400 2>/dev/null; sleep 3
+log "层3: UI 自动化开热点"
+
+# 屏幕状态: on / off / unknown。mWakefulness(安卓 12+ 叫 mWakefulnessRaw)各版本都有，
+# 老写法 mHoldingDisplaySuspendBlocker 兜底
+screen_state() {
+  _p=$(dumpsys power 2>/dev/null)
+  if echo "$_p" | grep -qE 'mWakefulness(Raw)?=Awake|Display Power: state=ON|mHoldingDisplaySuspendBlocker=true'; then
+    echo on
+  elif echo "$_p" | grep -qE 'mWakefulness(Raw)?=(Asleep|Dozing|Dreaming)|Display Power: state=(OFF|DOZE)'; then
+    echo off
+  else
+    echo unknown
+  fi
+}
+
+keyguard_showing() {
+  dumpsys activity activities 2>/dev/null | grep -q 'mKeyguardShowing=true' && return 0
+  dumpsys window 2>/dev/null | grep -qE 'mShowingLockscreen=true|mDreamingLockscreen=true'
+}
+
+# 亮屏 + 解锁(只能解无密码的锁屏；有密码时后面发现不在设置界面就什么都不点)。
+# 用 WAKEUP(224) 而不是电源键(26): 屏幕本来就亮着时电源键会把它关掉
+WOKE=0
+case "$(screen_state)" in
+  on) ;;
+  off) input keyevent 224; WOKE=1; sleep 1 ;;
+  *) input keyevent 224; sleep 1 ;;
+esac
+# 屏幕本来亮着且没锁屏时不滑，免得在用户正在用的 App 里乱滑
+if [ "$WOKE" = 1 ] || keyguard_showing; then
+  wm dismiss-keyguard >/dev/null 2>&1; sleep 1
+  SIZE=$(wm size 2>/dev/null | tail -1 | grep -oE '[0-9]+x[0-9]+')
+  SW=${SIZE%x*}; SH=${SIZE#*x}
+  case "$SW$SH" in ''|*[!0-9]*) SW=1080; SH=2400 ;; esac
+  input swipe $((SW / 2)) $((SH * 4 / 5)) $((SW / 2)) $((SH / 5)) 300; sleep 2
+fi
+
+# 收尾: 回桌面；屏幕本来是灭的就灭回去(SLEEP=223)
+ui_done() {
+  input keyevent HOME
+  [ "$WOKE" = 1 ] && input keyevent 223
+}
+
+# 打开热点设置页，按顺序试:
+#   1) 系统的"WLAN 热点设置"入口(安卓 11+)。各家 ROM 会把它指到自家的热点页，
+#      也就是下拉快捷开关里长按"热点"进去的那一页，页面上直接就有热点总开关
+#   2) 原生的 TetherSettings(热点和网络共享)。安卓 10 及以下，或者 1) 打不开时用。
+#      vivo 等 ROM 平时不显示这一页，所以看起来和设置里的热点界面不一样
+# 0x10008000 = NEW_TASK|CLEAR_TASK，每次都从这一页的开头进，不接着上次停留的子页面
+for page in "-a com.android.settings.WIFI_TETHER_SETTINGS" "-n com.android.settings/.TetherSettings"; do
+  out=$(am start $page -f 0x10008000 2>&1)
+  case "$out" in
+    *Error*|*Exception*) log "  打不开: am start $page" ;;
+    *) log "  打开热点设置页: am start $page"; break ;;
+  esac
+done
+sleep 3
 
 # 读 uiautomator 的界面 dump，决定下一步，输出一行 "动作 x y 说明":
 #   ON     热点开关已经是开的，不要再点(再点就关了)
@@ -240,27 +297,27 @@ for attempt in 1 2 3 4; do
   case "$act" in
     ON)
       log "  层3 热点开关已经是开的[$desc]，不再点击(再点会关掉)，等热点起来"
-      if wait_ap 8; then log "层3 成功: 热点已开"; log_ssid; input keyevent HOME; exit 0; fi
+      if wait_ap 8; then log "层3 成功: 热点已开"; log_ssid; ui_done; exit 0; fi
       break
       ;;
     TAP)
       log "  层3 点击热点开关: ($x,$y) [$desc]"
       input tap "$x" "$y"
-      if wait_ap 6; then log "层3 成功: 热点已开"; log_ssid; input keyevent HOME; exit 0; fi
+      if wait_ap 6; then log "层3 成功: 热点已开"; log_ssid; ui_done; exit 0; fi
       ;;
     ENTER)
       # 同一个入口点过一次页面还是没变，多半是这一行本身就是开关(控件没报成开关)，
       # 再点一次会把刚开起来的热点又关掉
       if [ "$x,$y" = "$last_enter" ]; then
         log "  层3 热点入口点过一次页面没变，不再重复点击，等热点起来"
-        if wait_ap 6; then log "层3 成功: 热点已开"; log_ssid; input keyevent HOME; exit 0; fi
+        if wait_ap 6; then log "层3 成功: 热点已开"; log_ssid; ui_done; exit 0; fi
         break
       fi
       last_enter="$x,$y"
       log "  层3 本页没有热点开关，点进热点入口: ($x,$y) [$desc]"
       input tap "$x" "$y"
       # 有的 ROM 点这一行就直接开热点了，顺便等一下
-      if wait_ap 4; then log "层3 成功: 热点已开"; log_ssid; input keyevent HOME; exit 0; fi
+      if wait_ap 4; then log "层3 成功: 热点已开"; log_ssid; ui_done; exit 0; fi
       ;;
     *)
       log "  层3 不点击: ${desc:-未找到热点开关}"
@@ -269,7 +326,7 @@ for attempt in 1 2 3 4; do
   esac
 done
 
-input keyevent HOME
+ui_done
 if ap_up; then
   log "热点最终已开启"
   log_ssid
