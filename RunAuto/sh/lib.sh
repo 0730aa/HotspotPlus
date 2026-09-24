@@ -14,7 +14,10 @@
 #     jq '.x // true'   在 x 为 false 时会错误地返回 true
 #
 # 二、热点
-#   ap_up                  热点已开返回 0，否则返回 1
+#   ap_up                  热点已开返回 0，否则返回 1(网卡检测 + 问系统，准)
+#   ap_up_fast             只做网卡/网络共享检测，不起 app_process，适合循环里等热点
+#   ap_sys_info            问系统热点状态和系统设置里保存的热点名称，
+#                          结果放在 AP_SYS_STATE(13=已开启) / AP_SYS_SSID
 #   ap_no_timeout          关掉系统"无设备连接自动关闭热点"的超时
 # ============================================================================
 
@@ -34,11 +37,42 @@ cfg_raw() {
 # ---------------------------------------------------------------------------
 # 热点接口检测
 # 不同芯片/ROM 的热点网卡命名不同:
-#   联发科(天玑) ap0 ; 高通(骁龙) wlan1 / softap0 / swlan0 ; 其他 uap0 / ap_br0 等
+#   联发科(天玑) ap0 ; 高通(骁龙) wlan1 / wlan2(vivo/iQOO) / softap0 / swlan0 ;
+#   其他 uap0 / ap_br0 等
+# 名单永远列不全，所以先问系统的网络共享服务，名单只做兜底
 # ---------------------------------------------------------------------------
 AP_IFACE_RE='^(ap0|wlan1|softap0|swlan0|uap0|ap_br0)'
+HOTSPOTCTL_DEX="/data/adb/modules/HotspotPlus/bin/hotspotctl.dex"
 
-ap_up() {
+# 系统网络共享服务里处于"已共享"的 Wi-Fi 网卡(热点)，有就返回 0。
+# dumpsys 的 Tether state 段形如 "wlan2 - TetheredState - lastError = 0"，
+# USB(rndis0/ncm0)、蓝牙(bt-pan) 共享也会出现在这里，所以只认无线网卡，
+# 另外排除 WLAN 直连(p2p-*)
+_ap_tethered() {
+  # 安卓 11 起网络共享是独立的 tethering 服务；10 及以下在 connectivity 里
+  if [ "$(getprop ro.build.version.sdk 2>/dev/null)" -ge 30 ] 2>/dev/null; then
+    _dump=$(dumpsys tethering 2>/dev/null)
+  else
+    _dump=$(dumpsys connectivity tethering 2>/dev/null)
+  fi
+  for _if in $(echo "$_dump" | grep -E ' - (TetheredState|LocalHotspotState)' \
+                 | sed 's/^[[:space:]]*//; s/ - .*//'); do
+    case "$_if" in p2p*) continue ;; esac
+    if [ -e "/sys/class/net/$_if/phy80211" ] || [ -d "/sys/class/net/$_if/wireless" ]; then
+      return 0
+    fi
+    if echo "$_if" | grep -qE '^(wlan|ap|softap|swlan|uap|wifi)'; then
+      return 0
+    fi
+  done
+  return 1
+}
+
+ap_up_fast() {
+  # 0) 问系统网络共享服务，不认网卡名
+  if _ap_tethered; then
+    return 0
+  fi
   # 1) busybox/toybox ifconfig 默认只列 UP 接口：命中已知名即认为热点开启
   if ifconfig 2>/dev/null | grep -qE "$AP_IFACE_RE"; then
     return 0
@@ -59,6 +93,25 @@ ap_up() {
   return 1
 }
 
+# 问 WifiManager: 热点状态(10 关闭中/11 已关闭/12 开启中/13 已开启/14 失败)
+# 和"系统设置 -> 个人热点"里保存的名称。查不到时两个变量为空
+ap_sys_info() {
+  AP_SYS_STATE=""
+  AP_SYS_SSID=""
+  [ -f "$HOTSPOTCTL_DEX" ] || return 1
+  _info=$(CLASSPATH="$HOTSPOTCTL_DEX" app_process /system/bin com.hotspotplus.HotspotCtl state 2>/dev/null)
+  AP_SYS_STATE=$(echo "$_info" | sed -n 's/^\[hotspotctl\] apState=\([0-9]*\).*/\1/p' | head -1)
+  AP_SYS_SSID=$(echo "$_info" | sed -n 's/^\[hotspotctl\] ssid=//p' | head -1)
+  [ -n "$AP_SYS_STATE" ]
+}
+
+# 网卡检测没认出来时再问一次系统(要起一次 app_process，约 1 秒)，
+# 避免把"已经开着的热点"当成没开，接着去重复开热点、切飞行模式、点屏幕
+ap_up() {
+  ap_up_fast && return 0
+  ap_sys_info && [ "$AP_SYS_STATE" = "13" ]
+}
+
 # ---------------------------------------------------------------------------
 # 关掉系统的"热点空闲自动关闭"
 # 安卓自带一个策略: 热点开着但一段时间(通常 5/10 分钟)没有设备连接就自动关闭，
@@ -74,7 +127,7 @@ ap_up() {
 # ---------------------------------------------------------------------------
 ap_no_timeout() {
   _sdk=$(getprop ro.build.version.sdk 2>/dev/null)
-  _dex="/data/adb/modules/HotspotPlus/bin/hotspotctl.dex"
+  _dex="$HOTSPOTCTL_DEX"
 
   if [ "${_sdk:-0}" -ge 30 ] 2>/dev/null && [ -f "$_dex" ]; then
     CLASSPATH="$_dex" app_process /system/bin com.hotspotplus.HotspotCtl noautooff 2>&1

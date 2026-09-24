@@ -11,12 +11,18 @@ import java.lang.reflect.Method;
  *   Android 11+ (API 30+): tethering 服务 ITetheringConnector.startTethering(TetheringRequestParcel,...)
  *   Android 7~10 (API 24~29): connectivity 服务 IConnectivityManager.startTethering(...)
  *
- * 用法: CLASSPATH=hotspotctl.dex app_process /system/bin com.hotspotplus.HotspotCtl on|off|noautooff
+ * 用法: CLASSPATH=hotspotctl.dex app_process /system/bin com.hotspotplus.HotspotCtl on|off|noautooff|state
  * 是否真的成功由外层脚本用接口检测(ap_up)判定。
+ *
+ *   state: 问 WifiManager 当前热点状态和系统设置里保存的热点名称，输出
+ *            [hotspotctl] apState=13
+ *            [hotspotctl] ssid=<名称>
+ *          退出码 0=热点已开启 1=未开启 2=查不到
  */
 public final class HotspotCtl {
 
     private static final int TETHERING_WIFI = 0;
+    private static final int WIFI_AP_STATE_ENABLED = 13;
     private static final String[] PKG_CANDIDATES = { "com.android.shell", "android", null };
 
     private static void log(String m) { System.out.println("[hotspotctl] " + m); }
@@ -32,6 +38,12 @@ public final class HotspotCtl {
             log("noautooff done=" + done);
             sleep(300);
             System.exit(done ? 0 : 1);
+        }
+
+        // 查询热点状态 + 系统保存的热点名称，不开关热点
+        if ("state".equalsIgnoreCase(action)) {
+            int st = printApState();
+            System.exit(st == WIFI_AP_STATE_ENABLED ? 0 : (st < 0 ? 2 : 1));
         }
 
         boolean on = !"off".equalsIgnoreCase(action);
@@ -192,11 +204,8 @@ public final class HotspotCtl {
     // 必须 getSoftApConfiguration -> Builder.setAutoShutdownEnabled(false) -> setSoftApConfiguration
     private static boolean disableApAutoShutdown() {
         try {
-            Object binder = getService("wifi");
-            if (binder == null) { log("wifi 服务 binder=null"); return false; }
-            Class<?> ibinder = Class.forName("android.os.IBinder");
-            Class<?> stub = Class.forName("android.net.wifi.IWifiManager$Stub");
-            Object wifi = stub.getMethod("asInterface", ibinder).invoke(null, binder);
+            Object wifi = getWifiManager();
+            if (wifi == null) return false;
             Class<?> wifiCls = Class.forName("android.net.wifi.IWifiManager");
 
             Object cfg = getSoftApConfig(wifi, wifiCls);
@@ -253,27 +262,7 @@ public final class HotspotCtl {
     }
 
     private static Object getSoftApConfig(Object wifi, Class<?> wifiCls) {
-        Method get = findShortest(wifiCls, "getSoftApConfiguration");
-        if (get == null) return null;
-        Class<?>[] pt = get.getParameterTypes();
-        for (int i = 0; i < PKG_CANDIDATES.length; i++) {
-            Object[] a = new Object[pt.length];
-            boolean known = true;
-            for (int j = 0; j < pt.length; j++) {
-                if (pt[j] == String.class) a[j] = PKG_CANDIDATES[i];
-                else if (pt[j] == boolean.class) a[j] = Boolean.FALSE;
-                else if (pt[j] == int.class) a[j] = Integer.valueOf(0);
-                else { known = false; break; }
-            }
-            if (!known) return null;
-            try {
-                Object c = get.invoke(wifi, a);
-                if (c != null) return c;
-            } catch (Throwable t) {
-                log("  getSoftApConfiguration(pkg=" + PKG_CANDIDATES[i] + ") 失败: " + rootMsg(t));
-            }
-        }
-        return null;
+        return callSimple(wifi, findShortest(wifiCls, "getSoftApConfiguration"));
     }
 
     private static Boolean readAutoShutdown(Object cfg) {
@@ -282,7 +271,84 @@ public final class HotspotCtl {
         } catch (Throwable t) { return null; }
     }
 
+    // ============== 查询热点状态 + 系统设置里保存的热点名称 ==============
+    // apState: 10 关闭中 / 11 已关闭 / 12 开启中 / 13 已开启 / 14 失败，查不到返回 -1。
+    // 名称取的是"系统设置 -> 个人热点"里保存的配置(api 方式开的就是这个)，
+    // 不是 cmd wifi start-softap 临时指定的名称
+    private static int printApState() {
+        int st = -1;
+        try {
+            Object wifi = getWifiManager();
+            if (wifi == null) return -1;
+            Class<?> wifiCls = Class.forName("android.net.wifi.IWifiManager");
+
+            Object r = callSimple(wifi, findShortest(wifiCls, "getWifiApEnabledState"));
+            if (r instanceof Integer) st = ((Integer) r).intValue();
+            log("apState=" + st);
+
+            String ssid = null;
+            // Android 11+: SoftApConfiguration；Android 10 及以下: WifiConfiguration.SSID
+            Object cfg = getSoftApConfig(wifi, wifiCls);
+            if (cfg != null) {
+                ssid = (String) callNoArg(cfg, "getSsid");
+                if (ssid == null) {
+                    Object ws = callNoArg(cfg, "getWifiSsid");
+                    if (ws != null) ssid = ws.toString();
+                }
+            } else {
+                Object wc = callSimple(wifi, findShortest(wifiCls, "getWifiApConfiguration"));
+                if (wc != null) {
+                    try { ssid = (String) wc.getClass().getField("SSID").get(wc); } catch (Throwable ignored) {}
+                }
+            }
+            if (ssid != null) log("ssid=" + ssid);
+        } catch (Throwable t) {
+            log("查询热点状态异常: " + rootMsg(t));
+        }
+        return st;
+    }
+
     // ========================= 反射/工具 =========================
+    private static Object getWifiManager() {
+        try {
+            Object binder = getService("wifi");
+            if (binder == null) { log("wifi 服务 binder=null"); return null; }
+            Class<?> ibinder = Class.forName("android.os.IBinder");
+            Class<?> stub = Class.forName("android.net.wifi.IWifiManager$Stub");
+            return stub.getMethod("asInterface", ibinder).invoke(null, binder);
+        } catch (Throwable t) {
+            log("拿 IWifiManager 失败: " + rootMsg(t));
+            return null;
+        }
+    }
+
+    // 调只有 String(包名)/boolean/int 参数的 binder 方法，逐个候选包名重试，返回第一个非 null 结果
+    private static Object callSimple(Object target, Method m) {
+        if (m == null) return null;
+        Class<?>[] pt = m.getParameterTypes();
+        for (int i = 0; i < PKG_CANDIDATES.length; i++) {
+            Object[] a = new Object[pt.length];
+            for (int j = 0; j < pt.length; j++) {
+                if (pt[j] == String.class) a[j] = PKG_CANDIDATES[i];
+                else if (pt[j] == boolean.class) a[j] = Boolean.FALSE;
+                else if (pt[j] == int.class) a[j] = Integer.valueOf(0);
+                else return null;
+            }
+            try {
+                Object r = m.invoke(target, a);
+                if (r != null) return r;
+            } catch (Throwable t) {
+                log("  " + m.getName() + "(pkg=" + PKG_CANDIDATES[i] + ") 失败: " + rootMsg(t));
+            }
+            if (pt.length == 0) break;
+        }
+        return null;
+    }
+
+    private static Object callNoArg(Object o, String name) {
+        try { return o.getClass().getMethod(name).invoke(o); } catch (Throwable t) { return null; }
+    }
+
     private static Object getService(String svc) {
         try {
             Class<?> sm = Class.forName("android.os.ServiceManager");
