@@ -121,12 +121,6 @@ else
 fi
 
 # 层 3: uiautomator 找到设置里的热点开关再点
-# 会亮屏并弹出设置界面，不想要可以在 config.json 里把 ap_ui_fallback 设为 false
-if [ "$(cfg .ap_ui_fallback true)" != "true" ]; then
-  log "层3 跳过: config.json 里 ap_ui_fallback=false(不弹出设置界面)"
-  log "热点未能开启，请查看日志排查"
-  exit 1
-fi
 log "层3: UI 自动化开热点"
 
 # 屏幕状态: on / off / unknown。mWakefulness(安卓 12+ 叫 mWakefulnessRaw)各版本都有，

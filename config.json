@@ -15,7 +15,6 @@
   
    "start_ap": "api",
    "ap_keep_alive": true,     
-   "ap_ui_fallback": true,
    "ap_mode2": {
        "ap_ssid": "Hotspotplus",  
        "open": false,           
