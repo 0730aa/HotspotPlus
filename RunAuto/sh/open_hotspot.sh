@@ -164,10 +164,46 @@ if [ "$WOKE" = 1 ] || keyguard_showing; then
   input swipe $((SW / 2)) $((SH * 4 / 5)) $((SW / 2)) $((SH / 5)) 300; sleep 2
 fi
 
-# 收尾: 回桌面；屏幕本来是灭的就灭回去(SLEEP=223)
+# 前台窗口所属的包名(mCurrentFocus)，拿不到(锁屏、切换中等)输出空
+top_pkg() {
+  _f=$(dumpsys window windows 2>/dev/null | grep 'mCurrentFocus=' | head -1)
+  # 个别版本 "windows" 子项里没有这一行，退回完整的 dumpsys window
+  [ -n "$_f" ] || _f=$(dumpsys window 2>/dev/null | grep 'mCurrentFocus=' | head -1)
+  echo "$_f" | grep -oE '[A-Za-z0-9_.]+/[A-Za-z0-9_.$]+' | head -1 | cut -d/ -f1
+}
+
+# 收尾: 把层3 打开的设置页退掉，不留在屏幕上
+#   1) 前台还是设置就按返回键(最多 4 次)。页面是 CLEAR_TASK 新开的，一层层退完这个任务就结束了，
+#      不会留在最近任务里；屏幕本来亮着的话会回到之前正在用的 App
+#   2) 返回键退不掉(被页面拦住)或者判断不了前台 → 按 HOME 回桌面；HOME 键被 ROM 拦掉再用 HOME intent
+#   3) 屏幕本来是灭的就灭回去(SLEEP=223)
+# 只做一次；脚本意外退出时由下面的 trap 兜底
+UI_DONE=0
 ui_done() {
-  input keyevent HOME
-  [ "$WOKE" = 1 ] && input keyevent 223
+  [ "$UI_DONE" = 1 ] && return 0
+  UI_DONE=1
+  _n=0
+  while [ "$_n" -lt 4 ]; do
+    case "$(top_pkg)" in
+      *[Ss]ettings*) input keyevent 4; sleep 1; _n=$((_n + 1)) ;;
+      *) break ;;
+    esac
+  done
+  _how="按返回键 $_n 次"
+  case "$(top_pkg)" in
+    ''|*[Ss]ettings*)
+      input keyevent 3; sleep 1
+      _how="$_how，再按 HOME"
+      case "$(top_pkg)" in
+        *[Ss]ettings*)
+          am start -a android.intent.action.MAIN -c android.intent.category.HOME >/dev/null 2>&1
+          _how="$_how，HOME 键无效改用 HOME intent"
+          ;;
+      esac
+      ;;
+  esac
+  [ "$WOKE" = 1 ] && { input keyevent 223; _how="$_how，灭屏"; }
+  log "  层3 已退出设置页($_how)"
 }
 
 # 打开热点设置页，按顺序试:
@@ -183,6 +219,9 @@ for page in "-a com.android.settings.WIFI_TETHER_SETTINGS" "-n com.android.setti
     *) log "  打开热点设置页: am start $page"; break ;;
   esac
 done
+# 从这里起不管怎么退出(包括被打断)，都要把设置页退掉
+trap ui_done EXIT
+trap 'exit 1' HUP INT TERM
 sleep 3
 
 # 读 uiautomator 的界面 dump，决定下一步，输出一行 "动作 x y 说明":
@@ -297,27 +336,27 @@ for attempt in 1 2 3 4; do
   case "$act" in
     ON)
       log "  层3 热点开关已经是开的[$desc]，不再点击(再点会关掉)，等热点起来"
-      if wait_ap 8; then log "层3 成功: 热点已开"; log_ssid; ui_done; exit 0; fi
+      if wait_ap 8; then log "层3 成功: 热点已开"; ui_done; log_ssid; exit 0; fi
       break
       ;;
     TAP)
       log "  层3 点击热点开关: ($x,$y) [$desc]"
       input tap "$x" "$y"
-      if wait_ap 6; then log "层3 成功: 热点已开"; log_ssid; ui_done; exit 0; fi
+      if wait_ap 6; then log "层3 成功: 热点已开"; ui_done; log_ssid; exit 0; fi
       ;;
     ENTER)
       # 同一个入口点过一次页面还是没变，多半是这一行本身就是开关(控件没报成开关)，
       # 再点一次会把刚开起来的热点又关掉
       if [ "$x,$y" = "$last_enter" ]; then
         log "  层3 热点入口点过一次页面没变，不再重复点击，等热点起来"
-        if wait_ap 6; then log "层3 成功: 热点已开"; log_ssid; ui_done; exit 0; fi
+        if wait_ap 6; then log "层3 成功: 热点已开"; ui_done; log_ssid; exit 0; fi
         break
       fi
       last_enter="$x,$y"
       log "  层3 本页没有热点开关，点进热点入口: ($x,$y) [$desc]"
       input tap "$x" "$y"
       # 有的 ROM 点这一行就直接开热点了，顺便等一下
-      if wait_ap 4; then log "层3 成功: 热点已开"; log_ssid; ui_done; exit 0; fi
+      if wait_ap 4; then log "层3 成功: 热点已开"; ui_done; log_ssid; exit 0; fi
       ;;
     *)
       log "  层3 不点击: ${desc:-未找到热点开关}"
