@@ -13,3 +13,4 @@
 - 脚本跑在安卓 /system/bin/sh(mksh) 或 Magisk 的 busybox ash 下：只用 POSIX sh，命令要兼容 toybox 和 busybox，awk 要兼容 one-true-awk 和 busybox awk
 - 公共函数放 RunAuto/sh/lib.sh（读配置 cfg、热点检测 ap_up 等）
 - 改了 native/hotspotctl/src 下的 Java，要运行 native/hotspotctl/build.sh 重新生成 bin/hotspotctl.dex，并一起提交
+- RunAuto/sh/diag.sh 是只读诊断脚本，要能在无 root 的 adb shell 下跑（远程真机平台测试用，流程见 docs/远程真机测试流程.md）

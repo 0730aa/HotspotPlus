@@ -20,6 +20,7 @@
      - mode2 用的 `cmd wifi start-softap` 起的是"本地热点"，不会启动系统的网络共享流程，所以部分机型会出现连上了没网、或者没有 IPv6 的情况。遇到这种情况请改用 api
      - 热点名称/密码: api 开出来的热点用的是 系统设置 -> 个人热点 里的名称和密码；config.json 里 ap_mode2 的名称/密码只有 mode2、或 api 回退到层2(cmd) 时才会用到。每次开完热点，log/open_hotspot.log 里都会写明这次用的是哪个名称
      - api 的最后一层兜底是 UI 点击: 前两层都开不了时会亮屏、打开系统的热点设置页去点热点开关，点完自动退出
+     - 热点有问题时，root 下执行 `sh /data/adb/modules/HotspotPlus/RunAuto/sh/diag.sh`，把 log/diag 文件夹发给作者
 
 6. frp 更多特性请自主前往官网查看，https://github.com/fatedier/frp
 
@@ -36,6 +37,7 @@
       2. 热点检测改为优先询问系统，不再依赖网卡名
       3. UI 点击方式重写：只点热点开关，已开不点，开完自动退出设置页，锁屏有密码时不操作
       4. 日志显示当前热点名称
+      5. 新增热点诊断脚本 diag.sh
 
 - **HotspotPlus_v8.5**
 
