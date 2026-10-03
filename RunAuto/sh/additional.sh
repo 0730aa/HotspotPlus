@@ -151,8 +151,8 @@ if [ -z "$hotspot_status" ]; then
       input keyevent ENTER
       sleep 1.3
 
-      # 检测热点
-      if ifconfig | grep -q "^ap0"; then
+      # 检测热点(不只认 ap0，高通 wlan1/wlan2 等也能认出)
+      if ap_up_fast; then
         log "第 $i 次成功开启热点"
         success=1
         break
